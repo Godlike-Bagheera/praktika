@@ -210,7 +210,7 @@ export default function TopicPage() {
                 <button className="btn btn-sm btn-outline-secondary">Найти</button>
               </form>
               <button className="btn btn-sm btn-success" onClick={exportExcel} disabled={exporting}>
-                {exporting ? 'Экспорт...' : '📥 Скачать Excel'}
+                {exporting ? 'Экспорт...' : 'Скачать Excel'}
               </button>
             </div>
           </div>
@@ -240,14 +240,14 @@ export default function TopicPage() {
                               className="btn btn-sm btn-outline-secondary py-0 px-2"
                               onClick={() => navigate(`/posts/${p.id}/edit`)}
                             >
-                              ✏️
+                              Изменить
                             </button>
                           )}
                           <button
                             className="btn btn-sm btn-outline-danger py-0 px-2"
                             onClick={() => deletePost(p)}
                           >
-                            🗑
+                            Удалить
                           </button>
                         </div>
                       )}

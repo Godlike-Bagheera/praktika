@@ -115,7 +115,7 @@ export default function HomePage() {
                     to={`/categories/${cat.id}`}
                     className="stretched-link text-decoration-none fw-semibold fs-5 text-dark"
                   >
-                    📁 {cat.name}
+                    {cat.name}
                   </Link>
                   <div className="text-muted-small mt-2">Создана: {new Date(cat.created_at).toLocaleDateString('ru-RU')}</div>
                   {isAdmin && (

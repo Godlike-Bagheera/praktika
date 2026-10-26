@@ -9,7 +9,7 @@ export default function Header() {
     <header className="navbar navbar-expand-lg bg-dark forum-header" data-bs-theme="dark">
       <div className="container">
         <Link className="navbar-brand fw-bold" to="/">
-          💬 Форум
+          Форум
         </Link>
         <div className="ms-auto d-flex align-items-center gap-3">
           {user && (
