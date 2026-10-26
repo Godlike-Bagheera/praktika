@@ -1,24 +1,14 @@
 import axios from 'axios';
 
-const TOKEN_KEY = 'forum_access';
-const REFRESH_KEY = 'forum_refresh';
 const USER_KEY = 'forum_user';
 
+// Токены хранятся в httpOnly-куках (устанавливает сервер), JS их не видит.
+// В localStorage остаётся только кэш профиля пользователя для UI.
 export const tokenStore = {
-  get access() {
-    return localStorage.getItem(TOKEN_KEY);
-  },
-  get refresh() {
-    return localStorage.getItem(REFRESH_KEY);
-  },
-  set({ access, refresh, user }) {
-    if (access) localStorage.setItem(TOKEN_KEY, access);
-    if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+  set({ user }) {
     if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
   },
   clear() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(USER_KEY);
   },
   getUser() {
@@ -30,12 +20,9 @@ export const tokenStore = {
   },
 };
 
-export const api = axios.create({ baseURL: '/api' });
-
-api.interceptors.request.use((config) => {
-  const token = tokenStore.access;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
+export const api = axios.create({
+  baseURL: '/api',
+  withCredentials: true, // слать httpOnly-куки с каждым запросом
 });
 
 let onUnauthorized = null;

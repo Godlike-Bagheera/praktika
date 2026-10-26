@@ -72,6 +72,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # JWT из httpOnly-кук (подставляет Authorization заголовок для DRF)
+    "forum.middleware.JwtCookieAuthMiddleware",
 ]
 
 ROOT_URLCONF = "forum.urls"

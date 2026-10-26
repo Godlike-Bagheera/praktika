@@ -21,15 +21,11 @@ export function AuthProvider({ children }) {
     });
   }, [logoutLocal, navigate]);
 
-  // Проверяем валидность токена при загрузке
+  // Проверяем валидность сессии при загрузке (токен — в httpOnly-куке,
+  // просто запрашиваем /auth/me; браузер сам приложит куку)
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (!tokenStore.access) {
-        logoutLocal();
-        if (!cancelled) setBooting(false);
-        return;
-      }
       try {
         const resp = await api.get('/auth/me');
         if (!cancelled) {
@@ -50,8 +46,8 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const resp = await api.post('/auth/login', { email, password });
-    const { access, refresh, user: u } = resp.data;
-    tokenStore.set({ access, refresh, user: u });
+    const u = resp.data.user;
+    tokenStore.set({ user: u });
     setUser(u);
     return u;
   }, []);
@@ -61,9 +57,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
-    const refresh = tokenStore.refresh;
     try {
-      if (refresh) await api.post('/auth/logout', { refresh });
+      await api.post('/auth/logout');
     } catch {
       /* токен уже недействителен — просто чистим клиента */
     }

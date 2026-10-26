@@ -1,5 +1,6 @@
 """Views for the Forum API."""
 import datetime
+import os
 import re
 
 from django.db.models import Count, Q
@@ -144,14 +145,29 @@ class LoginView(APIView):
             return Response({"errors": errs},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        from datetime import timedelta
+
         from rest_framework_simplejwt.tokens import RefreshToken
         user = serializer.validated_data["user"]
         refresh = RefreshToken.for_user(user)
-        return Response({
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "user": MeSerializer(user).data,
-        })
+        access = str(refresh.access_token)
+
+        response = Response({"user": MeSerializer(user).data})
+        secure = os.environ.get("DJANGO_SECURE_COOKIES", "0") == "1"
+        # access — httpOnly кука на весь сайт; JS её не видит (защита от XSS)
+        response.set_cookie(
+            "forum_access", access,
+            max_age=int(timedelta(hours=24).total_seconds()),
+            httponly=True, samesite="Lax", secure=secure, path="/",
+        )
+        # refresh — только для эндпоинта logout
+        response.set_cookie(
+            "forum_refresh", str(refresh),
+            max_age=int(timedelta(days=7).total_seconds()),
+            httponly=True, samesite="Lax", secure=secure,
+            path="/api/auth/",
+        )
+        return response
 
 
 class LogoutView(APIView):
@@ -160,21 +176,26 @@ class LogoutView(APIView):
     def post(self, request):
         from rest_framework_simplejwt.tokens import RefreshToken
 
-        refresh_token = (request.data or {}).get("refresh")
+        # refresh теперь приходит из httpOnly-куки (path=/api/auth/),
+        # тело запроса — обратная совместимость со старыми клиентами
+        refresh_token = (request.COOKIES.get("forum_refresh")
+                         or (request.data or {}).get("refresh"))
+        response = Response(status=status.HTTP_204_NO_CONTENT)
         if not refresh_token:
-            return Response(
-                {"errors": {"detail": "Не передан refresh-токен"}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            # даже без токена чистим куки — сессия всё равно завершается
+            response.delete_cookie("forum_access", path="/")
+            response.delete_cookie("forum_refresh", path="/api/auth/")
+            return response
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()  # добавляет jti в blacklist
         except Exception:
-            return Response(
-                {"errors": {"detail": "Некорректный токен"}},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-        return Response(status=status.HTTP_204_NO_CONTENT)
+            response.delete_cookie("forum_access", path="/")
+            response.delete_cookie("forum_refresh", path="/api/auth/")
+            return response
+        response.delete_cookie("forum_access", path="/")
+        response.delete_cookie("forum_refresh", path="/api/auth/")
+        return response
 
 
 class MeView(APIView):

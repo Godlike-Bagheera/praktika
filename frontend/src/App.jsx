@@ -44,10 +44,8 @@ function PublicOnlyRoute({ children }) {
 }
 
 function AppRoutes() {
-  const { booting } = useAuth();
-  if (booting && !localStorage.getItem('forum_access')) {
-    // всё равно дождёмся проверки /auth/me
-  }
+  // Токены теперь в httpOnly-куках — JS их не читает; статус сессии
+  // определяет AuthProvider через запрос /auth/me (состояние booting).
   return (
     <Routes>
       <Route
