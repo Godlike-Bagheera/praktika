@@ -25,6 +25,7 @@ urlpatterns = [
     # Posts
     path("posts/<int:pk>", views.PostDetailView.as_view(),
          name="post-detail"),
-    path("posts/export/", views.PostsExportView.as_view(),
+    # Без слэша: фронт обращается к /api/posts/export (nginx проксирует как есть)
+    path("posts/export", views.PostsExportView.as_view(),
          name="posts-export"),
 ]

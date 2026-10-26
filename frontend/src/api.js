@@ -77,7 +77,7 @@ export function errorMessage(error) {
 
 /** Скачивание Excel с авторизацией; возвращает Blob. */
 export async function downloadExport(params) {
-  const resp = await api.get('/posts/export/', {
+  const resp = await api.get('/posts/export', {
     params,
     responseType: 'blob',
   });

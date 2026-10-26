@@ -21,11 +21,25 @@ class CategorySerializer(serializers.ModelSerializer):
                 "Введите название категории (до 100 символов)"
             )
         qs = Category.objects.filter(name__iexact=value)
-        if self.instance is not None:
+        if not qs.exists() and getattr(self, "instance", None) is not None:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
             raise serializers.ValidationError("Эта категория уже существует")
         return value
+
+    def save(self, **kwargs):
+        try:
+            return super().save(**kwargs)
+        except Exception as e:
+            # Gunicorn с несколькими воркерами: уникальность в БД (name_lower) —
+            # последний рубеж (проверка iexact выше не атомарна).
+            from django.db import IntegrityError, transaction
+            if isinstance(e, IntegrityError):
+                transaction.rollback()
+                raise serializers.ValidationError(
+                    {"name": "Эта категория уже существует"}
+                )
+            raise
 
 
 class TopicSerializer(serializers.ModelSerializer):

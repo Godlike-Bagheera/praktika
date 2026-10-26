@@ -91,11 +91,7 @@ class RegisterView(APIView):
         errors = {}
         if not email or not EMAIL_RE.match(email) or len(email) > 254:
             errors["email"] = "Введите корректный email"
-        elif Category is None:  # pragma: no cover
-            pass
-        if not password_confirm:
-            errors["password_confirm"] = "Пароли не совпадают"
-        elif password != password_confirm:
+        if password != password_confirm:
             errors["password_confirm"] = "Пароли не совпадают"
 
         if errors:
@@ -306,8 +302,8 @@ class TopicDetailView(APIView):
 
     def delete(self, request, pk):
         obj = self.get_object(pk)
-        if obj.owner_id != request.user.id and not IsAdmin.has_permission(
-                IsAdmin(), self, request):
+        if obj.owner_id != request.user.id and not getattr(
+                request.user, "is_admin_role", False):
             raise PermissionDenied("Нельзя удалить чужую тему")
         obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -440,13 +436,19 @@ class PostsExportView(APIView):
         for cell in ws[1]:
             cell.font = bold
         ws.freeze_panes = "A2"
-        ws.auto_filter.ref = f"A1:E{max(count + 1, 2)}"
+        # Автофильтр включаем после заполнения данных (см. ниже), чтобы ref
+        # соответствовал реальному числу строк.
 
         date_fmt = "DD.MM.YYYY"
         widths = [len(h) for h in headers]
         for p in qs.iterator():
+            # Переводим UTC-время в локальное (Europe/Moscow), чтобы дата в
+            # файле совпадала с тем, что видит пользователь в списке.
+            local_dt = p.created_at.astimezone(
+                datetime.timezone(datetime.timedelta(hours=3))
+            )
             created = datetime.datetime.combine(
-                p.created_at.date(), p.created_at.time()
+                local_dt.date(), local_dt.time()
             )
             row = [
                 p.id,
@@ -465,6 +467,9 @@ class PostsExportView(APIView):
 
         for i, w in enumerate(widths, start=1):
             ws.column_dimensions[get_column_letter(i)].width = w + 2
+
+        # Автофильтр по фактическому числу строк (заголовок + данные)
+        ws.auto_filter.ref = f"A1:E{max(ws.max_row, 2)}"
 
         today = datetime.date.today().strftime("%Y-%m-%d")
         filename = f"forum_posts_{today}.xlsx"

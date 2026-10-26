@@ -10,12 +10,20 @@ class Category(models.Model):
         "название", max_length=100, unique=True,
         error_messages={"unique": "Категория с таким названием уже существует"},
     )
+    name_lower = models.CharField(
+        "название (регистронезависимый ключ)", max_length=100,
+        unique=True, editable=False, default="", blank=True,
+    )
     created_at = models.DateTimeField("дата создания", auto_now_add=True)
 
     class Meta:
         verbose_name = "категория"
         verbose_name_plural = "категории"
         ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        self.name_lower = (self.name or "").strip().lower()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
