@@ -35,6 +35,8 @@ cp .env.example .env
 docker compose up -d --build
 
 # создание тестовых данных (админ, пользователь, категории, темы, сообщения):
+# если не запускать seed_demo, категорий не будет — сайт покажет «Пока нет категорий»;
+# категории после этого создаёт администратор вручную на главной странице
 docker compose exec app python manage.py seed_demo
 ```
 
@@ -71,6 +73,8 @@ nano .env   # DJANGO_SECRET_KEY (openssl rand -hex 32), DB_PASSWORD,
 # 4. Запуск
 sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw allow 8084/tcp
 docker compose up -d --build
+# если не запускать seed_demo, категорий не будет — сайт покажет «Пока нет категорий»;
+# категории после этого создаёт администратор вручную на главной странице
 docker compose exec app python manage.py seed_demo
 
 # 5. Проверка
