@@ -89,24 +89,29 @@ export default function RegisterPage() {
   );
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-md-6 col-lg-5">
-        <div className="card shadow-sm mt-5">
-          <div className="card-body p-4">
-            <h1 className="h4 mb-3 text-center">Регистрация</h1>
-            <Alert>{formError}</Alert>
-            <form onSubmit={onSubmit} noValidate>
-              {field('email', 'Email', 'email', 'name@example.com')}
-              {field('username', 'Имя пользователя', 'text', 'user_123')}
-              {field('password', 'Пароль', 'password')}
-              {field('password_confirm', 'Повторите пароль', 'password')}
-              <button className="btn btn-primary w-100" disabled={busy}>
-                {busy ? 'Регистрация...' : 'Зарегистрироваться'}
-              </button>
-            </form>
-            <p className="text-center mt-3 mb-0">
-              Уже есть аккаунт? <Link to="/login">Войти</Link>
-            </p>
+    <div className="auth-page">
+      <div className="row justify-content-center w-100">
+        <div className="col-md-6 col-lg-5">
+          <div className="card auth-card">
+            <div className="card-body p-4">
+              <div className="text-center mb-3">
+                <span className="auth-logo mb-2">F</span>
+                <h1 className="h4 mb-0">Регистрация</h1>
+              </div>
+              <Alert>{formError}</Alert>
+              <form onSubmit={onSubmit} noValidate>
+                {field('email', 'Email', 'email', 'name@example.com')}
+                {field('username', 'Имя пользователя', 'text', 'user_123')}
+                {field('password', 'Пароль', 'password')}
+                {field('password_confirm', 'Повторите пароль', 'password')}
+                <button className="btn btn-primary w-100" disabled={busy}>
+                  {busy ? 'Регистрация...' : 'Зарегистрироваться'}
+                </button>
+              </form>
+              <p className="text-center mt-3 mb-0">
+                Уже есть аккаунт? <Link to="/login">Войти</Link>
+              </p>
+            </div>
           </div>
         </div>
       </div>

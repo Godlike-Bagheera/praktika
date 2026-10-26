@@ -91,7 +91,7 @@ export default function HomePage() {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Категории</h1>
+        <h1 className="h3 mb-0 page-title">Категории</h1>
         {isAdmin && (
           <button className="btn btn-primary" onClick={openCreate}>
             Создать категорию
@@ -104,19 +104,22 @@ export default function HomePage() {
       {loading ? (
         <Spinner />
       ) : categories.length === 0 ? (
-        <div className="alert alert-info">Пока нет категорий</div>
+        <div className="empty-state">Пока нет категорий</div>
       ) : (
         <div className="row g-3">
           {categories.map((cat) => (
             <div key={cat.id} className="col-md-6 col-lg-4">
               <div className="card h-100 card-hover shadow-sm">
                 <div className="card-body d-flex flex-column">
-                  <Link
-                    to={`/categories/${cat.id}`}
-                    className="stretched-link text-decoration-none fw-semibold fs-5 text-dark"
-                  >
-                    {cat.name}
-                  </Link>
+                  <div className="d-flex align-items-center gap-3">
+                    <span className="cat-icon">{cat.name.charAt(0).toUpperCase()}</span>
+                    <Link
+                      to={`/categories/${cat.id}`}
+                      className="stretched-link text-decoration-none fw-semibold fs-5 text-dark"
+                    >
+                      {cat.name}
+                    </Link>
+                  </div>
                   <div className="text-muted-small mt-2">Создана: {new Date(cat.created_at).toLocaleDateString('ru-RU')}</div>
                   {isAdmin && (
                     <div className="mt-3 d-flex gap-2">

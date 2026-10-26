@@ -37,11 +37,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-md-6 col-lg-5">
-        <div className="card shadow-sm mt-5">
-          <div className="card-body p-4">
-            <h1 className="h4 mb-3 text-center">Вход</h1>
+    <div className="auth-page">
+      <div className="row justify-content-center w-100">
+        <div className="col-md-6 col-lg-5">
+          <div className="card auth-card">
+            <div className="card-body p-4">
+              <div className="text-center mb-3">
+                <span className="auth-logo mb-2">F</span>
+                <h1 className="h4 mb-0">Вход в форум</h1>
+              </div>
             {registered && (
               <Alert kind="success">Регистрация успешна. Войдите в аккаунт.</Alert>
             )}
@@ -75,9 +79,10 @@ export default function LoginPage() {
                 {busy ? 'Вход...' : 'Войти'}
               </button>
             </form>
-            <p className="text-center mt-3 mb-0">
-              Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-            </p>
+              <p className="text-center mt-3 mb-0">
+                Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+              </p>
+            </div>
           </div>
         </div>
       </div>

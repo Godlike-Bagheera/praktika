@@ -101,25 +101,28 @@ export default function CategoryPage() {
       {loading ? (
         <Spinner />
       ) : topics.length === 0 ? (
-        <div className="alert alert-info">
+        <div className="empty-state">
           {search ? 'Ничего не найдено по запросу' : 'В этой категории нет тем'}
         </div>
       ) : (
-        <div className="list-group">
+        <div className="list-group border-0">
           {topics.map((t) => (
             <Link
               key={t.id}
               to={`/topics/${t.id}`}
-              className="list-group-item list-group-item-action"
+              className="list-group-item list-group-item-action bg-white"
             >
-              <div className="d-flex justify-content-between align-items-start">
-                <div>
+              <div className="d-flex justify-content-between align-items-start gap-3">
+                <span className="cat-icon" style={{ width: 38, height: 38, fontSize: '1rem' }}>
+                  {t.title.charAt(0).toUpperCase()}
+                </span>
+                <div className="flex-grow-1">
                   <div className="fw-semibold">{t.title}</div>
                   <div className="text-muted-small">
                     Автор: {t.owner.username} · {new Date(t.created_at).toLocaleString('ru-RU')}
                   </div>
                 </div>
-                <span className="badge text-bg-secondary ms-3">{t.posts_count} сообщ.</span>
+                <span className="count-badge">{t.posts_count} сообщ.</span>
               </div>
             </Link>
           ))}

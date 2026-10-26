@@ -218,43 +218,50 @@ export default function TopicPage() {
           {loading ? (
             <Spinner />
           ) : posts.length === 0 ? (
-            <div className="alert alert-info">
+            <div className="empty-state">
               {search ? 'Ничего не найдено' : 'В теме нет сообщений. Напишите первое!'}
             </div>
           ) : (
             <div className="mb-3">
               {posts.map((p) => (
                 <div key={p.id} className="card post-card shadow-sm mb-2">
-                  <div className="card-body py-2">
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div
-                        className="flex-grow-1"
-                        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                      >
-                        {p.text}
-                      </div>
-                      {(p.owner.id === user?.id || isAdmin) && (
-                        <div className="d-flex gap-1 ms-3 flex-shrink-0">
-                          {p.owner.id === user?.id && (
-                            <button
-                              className="btn btn-sm btn-outline-secondary py-0 px-2"
-                              onClick={() => navigate(`/posts/${p.id}/edit`)}
-                            >
-                              Изменить
-                            </button>
-                          )}
-                          <button
-                            className="btn btn-sm btn-outline-danger py-0 px-2"
-                            onClick={() => deletePost(p)}
-                          >
-                            Удалить
-                          </button>
+                  <div className="card-body py-2 d-flex gap-3">
+                    <span className="post-avatar">{p.owner.username.charAt(0).toUpperCase()}</span>
+                    <div className="flex-grow-1">
+                      <div className="d-flex justify-content-between align-items-start">
+                        <div
+                          className="flex-grow-1"
+                          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                        >
+                          {p.text}
                         </div>
-                      )}
-                    </div>
-                    <div className="text-muted-small mt-1">
-                      {p.owner.username} · {new Date(p.created_at).toLocaleString('ru-RU')}
-                      {p.updated_at !== p.created_at && ' (изменено)'}
+                        {(p.owner.id === user?.id || isAdmin) && (
+                          <div className="d-flex gap-1 ms-3 flex-shrink-0">
+                            {p.owner.id === user?.id && (
+                              <button
+                                className="btn btn-sm btn-outline-secondary py-0 px-2"
+                                onClick={() => navigate(`/posts/${p.id}/edit`)}
+                              >
+                                Изменить
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-sm btn-outline-danger py-0 px-2"
+                              onClick={() => deletePost(p)}
+                            >
+                              Удалить
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-muted-small mt-1 d-flex align-items-center gap-2 flex-wrap">
+                        <span className="fw-semibold text-dark">{p.owner.username}</span>
+                        <span>·</span>
+                        <span>{new Date(p.created_at).toLocaleString('ru-RU')}</span>
+                        {p.updated_at !== p.created_at && (
+                          <span className="edited-badge">изменено</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

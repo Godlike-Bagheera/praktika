@@ -6,17 +6,19 @@ export default function Header() {
   const navigate = useNavigate();
 
   return (
-    <header className="navbar navbar-expand-lg bg-dark forum-header" data-bs-theme="dark">
+    <header className="navbar navbar-expand-lg forum-header" data-bs-theme="dark">
       <div className="container">
-        <Link className="navbar-brand fw-bold" to="/">
+        <Link className="navbar-brand fw-bold d-flex align-items-center" to="/">
+          <span className="brand-logo">F</span>
           Форум
         </Link>
-        <div className="ms-auto d-flex align-items-center gap-3">
+        <div className="ms-auto d-flex align-items-center gap-2">
           {user && (
             <>
-              <span className="text-light">
-                {user.username}{' '}
-                {isAdmin && <span className="badge bg-warning text-dark ms-1">Администратор</span>}
+              <span className="user-chip text-light">
+                <span className="avatar-circle">{user.username.charAt(0).toUpperCase()}</span>
+                {user.username}
+                {isAdmin && <span className="badge badge-admin">Администратор</span>}
               </span>
               <button
                 className="btn btn-outline-light btn-sm"
