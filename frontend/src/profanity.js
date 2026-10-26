@@ -46,6 +46,7 @@ const PATTERNS = [
 ];
 
 const LATIN_PATTERNS = [
+  new RegExp("(?:^|(?<=[^\u0451a-z\u0430-\u044f\u0451-\u0451]))(?:h|x)[uy\u0443]y\\b", "iu"),
   new RegExp("\\bcy+k+a+\\b|\\bsu+k+a+\\b|\\bx+y+[3e\u0451]+[ap]*\\b", "iu"),
   new RegExp("\\bf+u+c+k+\\b|\\bfuck(?:ed|ing|er|s)?\\b|(?:mother|farm)[\\s-]?f+u+c+k+\\s?[a-z]*", "iu"),
   new RegExp("\\bsh+i+t+\\b|\\bbull?sh*i*t+\\b", "iu"),

@@ -131,6 +131,7 @@ def _translit_hit(text: str) -> bool:
 
 # Транслит/латинский мат — по исходному тексту (до нормализации)
 _LATIN_PATTERNS = [
+    re.compile(r"(?i)(?:^|(?<=[^a-zа-яё]))(?:h|x)[uуy]y\b"),          # huy/xuy (латиницей, y в конце)
     re.compile(r"(?i)\bcy+k+a+\b|\bsu+k+a+\b|\bx+y+[e3ё]+[pa]*\b"),  # cyka/suka, xyepa/xyena транслит
     re.compile(r"(?i)\bf+u+c+k+\b|\bfuck(?:ed|ing|er|s)?\b|(?:mother|farm)[-\s]?f+u+c+k+\s?[a-z]*"),
     re.compile(r"(?i)\bsh+i+t+\b|\bbull?sh*i*t+\b"),

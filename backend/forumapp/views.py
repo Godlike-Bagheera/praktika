@@ -171,7 +171,7 @@ class LoginView(APIView):
             "forum_refresh", str(refresh),
             max_age=int(timedelta(days=7).total_seconds()),
             httponly=True, samesite="Lax", secure=secure,
-            path="/api/auth/",
+            path="/",
         )
         return response
 
@@ -190,17 +190,72 @@ class LogoutView(APIView):
         if not refresh_token:
             # даже без токена чистим куки — сессия всё равно завершается
             response.delete_cookie("forum_access", path="/")
-            response.delete_cookie("forum_refresh", path="/api/auth/")
+            response.delete_cookie("forum_refresh", path="/")
             return response
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()  # добавляет jti в blacklist
         except Exception:
             response.delete_cookie("forum_access", path="/")
-            response.delete_cookie("forum_refresh", path="/api/auth/")
+            response.delete_cookie("forum_refresh", path="/")
             return response
         response.delete_cookie("forum_access", path="/")
-        response.delete_cookie("forum_refresh", path="/api/auth/")
+        response.delete_cookie("forum_refresh", path="/")
+        return response
+
+
+class RefreshView(APIView):
+    """Обновление access-куки по refresh-куке (для фронтенда после истечения 24ч)."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        from datetime import timedelta
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        # refresh-токен живёт в httpOnly-куке даже после истечения access,
+        # поэтому эндпоинт доступен без аутентификации (проверяем токен сами)
+        refresh_token = (request.COOKIES.get("forum_refresh")
+                         or (request.data or {}).get("refresh"))
+        if not refresh_token:
+            return Response(
+                {"errors": {"detail": "Сессия истекла. Войдите снова"}},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        try:
+            from accounts.models import User
+
+            old = RefreshToken(refresh_token)
+            user = User.objects.get(pk=old["user_id"])
+            if not user.is_active:
+                raise Exception("user inactive")
+            # ротация: старый refresh в blacklist, выдаём новую пару
+            new = RefreshToken.for_user(user)
+            old.blacklist()
+        except Exception:
+            response = Response(
+                {"errors": {"detail": "Сессия истекла. Войдите снова"}},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+            response.delete_cookie("forum_access", path="/")
+            response.delete_cookie("forum_refresh", path="/")
+            return response
+
+        secure = os.environ.get("DJANGO_SECURE_COOKIES", "0") == "1"
+        response = Response({"user": MeSerializer(user).data})
+        response.set_cookie(
+            "forum_access", str(new.access_token),
+            max_age=int(timedelta(hours=24).total_seconds()),
+            httponly=True, samesite="Lax", secure=secure, path="/",
+        )
+        response.set_cookie(
+            "forum_refresh", str(new),
+            max_age=int(timedelta(days=7).total_seconds()),
+            httponly=True, samesite="Lax", secure=secure,
+            path="/",
+        )
         return response
 
 
@@ -419,7 +474,7 @@ class PostDetailView(APIView):
 def _clean_formula(value):
     """Защита от инъекций формул: значения, начинающиеся с = + - @,
     записываются с апострофом в начале."""
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+    if isinstance(value, str) and value.lstrip()[:1] in ("=", "+", "-", "@"):
         return "'" + value
     return value
 

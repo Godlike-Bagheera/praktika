@@ -76,6 +76,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.username
 
+    def save(self, *args, **kwargs):
+        # Суперпользователь (созданный через createsuperuser) автоматически
+        # получает роль admin, иначе фронтенд не покажет ему админские кнопки.
+        if self.is_superuser:
+            self.role = self.Role.ADMIN
+        super().save(*args, **kwargs)
+
     @property
     def is_admin_role(self):
         return self.role == self.Role.ADMIN or self.is_superuser

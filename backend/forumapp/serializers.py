@@ -1,3 +1,4 @@
+from django.db import IntegrityError, transaction
 from rest_framework import serializers
 
 from .models import Category, Post, Topic
@@ -38,17 +39,14 @@ class CategorySerializer(serializers.ModelSerializer):
 
     def save(self, **kwargs):
         try:
-            return super().save(**kwargs)
-        except Exception as e:
+            with transaction.atomic():
+                return super().save(**kwargs)
+        except IntegrityError:
             # Gunicorn с несколькими воркерами: уникальность в БД (name_lower) —
             # последний рубеж (проверка iexact выше не атомарна).
-            from django.db import IntegrityError, transaction
-            if isinstance(e, IntegrityError):
-                transaction.rollback()
-                raise serializers.ValidationError(
-                    {"name": "Эта категория уже существует"}
-                )
-            raise
+            raise serializers.ValidationError(
+                {"name": "Эта категория уже существует"}
+            )
 
 
 class TopicSerializer(serializers.ModelSerializer):
