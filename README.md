@@ -162,3 +162,20 @@ scripts\setup.bat
 
 ### Полный клон ВМ (альтернатива):
 Выключить ВМ → VirtualBox меню «Экспорт конфигурации виртуальной машины» (.ova) → на новом ПК «Импорт конфигурации». Внутри OVA будет вся ОС со всеми настройками вместе с проектом.
+
+### Публикация образов на Docker Hub (запуск без сборки):
+```bash
+docker compose build                                   # собрать образы app и nginx
+docker login -u testbagheera666                        # пароль с https://hub.docker.com
+bash scripts/push_images.sh testbagheera666            # пуш forum-app и forum-nginx
+```
+На любом новом ПК после этого проект поднимается за секунды, без npm/pip-сборки:
+```bash
+git clone https://github.com/Godlike-Bagheera/praktika.git
+cd praktika && cp .env.example .env                    # заполнить DB_PASSWORD
+docker compose -f docker-compose.hub.yml up -d         # образы тянутся с Docker Hub
+bash scripts/setup.sh forum_backup_<дата>.tar.gz       # восстановить базу из дампа (опционально)
+```
+
+### Важно про секреты
+Никогда не коммить `.env` и не публикуй пароли в публичных репозиториях/образах. Для приватных образов используй `docker push` в приватный репозиторий Docker Hub и `docker login` перед запуском.
