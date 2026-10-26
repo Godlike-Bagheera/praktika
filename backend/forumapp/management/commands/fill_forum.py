@@ -189,6 +189,11 @@ class Command(BaseCommand):
         parser.add_argument("--users", type=int, default=25)
         parser.add_argument("--user-password", default="Demo12345")
         parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument(
+            "--backfill", action="store_true",
+            help="Дописать стартовые посты и ответы во ВСЕ существующие темы "
+                 "(даже созданные ранее), а не только в новые",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -249,35 +254,51 @@ class Command(BaseCommand):
         # --- Темы и сообщения ---
         new_topics = 0
         new_posts = 0
+
+        def populate(topic, cat_name):
+            """Наполняет тему: стартовый пост автора + цепочка ответов."""
+            nonlocal new_posts
+            n_existing = Post.objects.filter(topic=topic).count()
+            if n_existing == 0:
+                Post.objects.create(
+                    topic=topic, owner=topic.owner,
+                    text=rng.choice(OPENING_TEXTS),
+                )
+                new_posts += 1
+                n_existing = 1
+            target = rng.randint(4, 10)
+            if cat_name == "Общий раздел" and "представьтесь" in topic.title.lower():
+                target = 30  # длинный тред для проверки пагинации (>20)
+            if cat_name == "Флудилка" and topic.title == "Тред для офтопа":
+                target = 35  # ещё один тред > 20 сообщений
+            for _ in range(max(0, target - n_existing)):
+                author = rng.choice(users)
+                text = rng.choice(REPLY_PREFIXES) + rng.choice(POST_TEXTS)
+                if rng.random() < 0.15:
+                    text += " " + rng.choice(POST_TEXTS)
+                Post.objects.create(topic=topic, owner=author, text=text)
+                new_posts += 1
+
         for cat_name, titles in TOPICS_BY_CATEGORY.items():
             cat = cats[cat_name]
             for title in titles:
                 topic = Topic.objects.filter(category=cat, title=title).first()
                 if topic is not None:
+                    if options["backfill"]:
+                        populate(topic, cat_name)
                     continue
                 owner = rng.choice(users)
                 topic = Topic.objects.create(category=cat, owner=owner, title=title)
                 new_topics += 1
+                populate(topic, cat_name)
 
-                # Первый пост = автор темы (стартовое сообщение)
-                Post.objects.create(
-                    topic=topic, owner=owner,
-                    text=rng.choice(OPENING_TEXTS),
-                )
-                new_posts += 1
-
-                n_replies = rng.randint(3, 9)
-                if cat_name == "Общий раздел" and "представьтесь" in title.lower():
-                    n_replies = 29  # длинный тред для проверки пагинации (>20)
-                if cat_name == "Флудилка" and title == "Тред для офтопа":
-                    n_replies = 34  # ещё один тред > 20 сообщений
-                for _ in range(n_replies):
-                    author = rng.choice(users)
-                    text = rng.choice(REPLY_PREFIXES) + rng.choice(POST_TEXTS)
-                    if rng.random() < 0.15:
-                        text += " " + rng.choice(POST_TEXTS)
-                    Post.objects.create(topic=topic, owner=author, text=text)
-                    new_posts += 1
+        # При --backfill дописываем ответы и в темы, созданные вне шаблонов
+        # (например, seed_demo или вручную пользователями) — но только те,
+        # где вообще нет ни одного сообщения.
+        if options["backfill"]:
+            empty_topics = Topic.objects.filter(posts__isnull=True).select_related("category")
+            for topic in empty_topics:
+                populate(topic, topic.category.name)
 
         self.stdout.write(self.style.SUCCESS(
             f"Новых тем создано: {new_topics}, новых сообщений: {new_posts}"
