@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../api';
 import Alert from '../components/Alert';
@@ -51,6 +51,27 @@ export default function CategoryPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Поиск в реальном времени: debounce 400 мс — запрос к API без нажатия «Найти»
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const current = searchParams.get('search') || '';
+      const wanted = searchInput.trim();
+      if (wanted !== current) {
+        const params = {};
+        if (wanted) params.search = wanted;
+        setSearchParams(params, { replace: true });
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Мгновенная фильтрация уже загруженной страницы тем (до ответа API)
+  const visibleTopics = useMemo(() => {
+    const q = searchInput.trim().toLowerCase();
+    if (!q) return topics;
+    return topics.filter((t) => t.title.toLowerCase().includes(q));
+  }, [topics, searchInput]);
 
   function applySearch(e) {
     e.preventDefault();
@@ -106,7 +127,7 @@ export default function CategoryPage() {
         </div>
       ) : (
         <div className="list-group border-0">
-          {topics.map((t) => (
+          {visibleTopics.map((t) => (
             <Link
               key={t.id}
               to={`/topics/${t.id}`}

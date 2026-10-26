@@ -24,7 +24,13 @@ from accounts.serializers import (
 from .models import Category, Post, Topic
 from .pagination import ForumPagination
 from .permissions import IsAdmin, OwnerOrAdminDelete, OwnerOnlyEdit
-from .serializers import CategorySerializer, PostSerializer, TopicSerializer
+from .serializers import (
+    CategorySerializer,
+    PostPatchSerializer,
+    PostSerializer,
+    TopicPatchSerializer,
+    TopicSerializer,
+)
 
 # ---------------------------------------------------------------------------
 # Rate limiting: no more than 10 login attempts per minute from one IP.

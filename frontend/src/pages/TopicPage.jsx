@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, downloadExport, errorMessage, extractErrors } from '../api';
+import { containsProfanity, PROFANITY_MESSAGE } from '../profanity';
 import { useAuth } from '../AuthContext';
 import Alert from '../components/Alert';
 import Pagination from '../components/Pagination';
@@ -64,6 +65,29 @@ export default function TopicPage() {
     if (searchInput.trim()) params.search = searchInput.trim();
     setSearchParams(params);
   }
+
+  // Поиск в реальном времени: debounce 400 мс, без нажатия «Найти»
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const current = searchParams.get('search') || '';
+      const wanted = searchInput.trim();
+      if (wanted !== current) {
+        const params = {};
+        if (wanted) params.search = wanted;
+        setSearchParams(params, { replace: true });
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Живой фильтр по уже загруженной странице сообщений (мгновенная подсветка)
+  const visiblePosts = useMemo(() => {
+    const q = searchInput.trim().toLowerCase();
+    if (!q) return posts;
+    return posts.filter((p) => p.text.toLowerCase().includes(q));
+  }, [posts, searchInput]);
+
+  const profanityWarning = containsProfanity(newText);
 
   function changePage(p) {
     const params = {};
@@ -223,7 +247,7 @@ export default function TopicPage() {
             </div>
           ) : (
             <div className="mb-3">
-              {posts.map((p) => (
+              {visiblePosts.map((p) => (
                 <div key={p.id} className="card post-card shadow-sm mb-2">
                   <div className="card-body py-2 d-flex gap-3">
                     <span className="post-avatar">{p.owner.username.charAt(0).toUpperCase()}</span>
@@ -274,16 +298,19 @@ export default function TopicPage() {
             <div className="card-body">
               <label className="form-label fw-semibold">Новое сообщение</label>
               <textarea
-                className={`form-control ${postError ? 'is-invalid' : ''}`}
+                className={`form-control ${postError || profanityWarning ? 'is-invalid' : ''}`}
                 rows={3}
                 maxLength={2000}
                 value={newText}
                 onChange={(e) => setNewText(e.target.value)}
                 placeholder="Введите текст сообщения (до 2000 символов)"
               />
+              {profanityWarning && !postError && (
+                <div className="invalid-feedback d-block">{PROFANITY_MESSAGE}</div>
+              )}
               {postError && <div className="invalid-feedback d-block">{postError}</div>}
               <div className="mt-2">
-                <button type="submit" className="btn btn-primary" disabled={sending}>
+                <button type="submit" className="btn btn-primary" disabled={sending || profanityWarning}>
                   {sending ? 'Отправка...' : 'Отправить'}
                 </button>
               </div>

@@ -1,6 +1,15 @@
 from rest_framework import serializers
 
 from .models import Category, Post, Topic
+from .profanity import contains_profanity
+
+
+def check_profanity(value: str) -> str:
+    if contains_profanity(value):
+        raise serializers.ValidationError(
+            "Сообщение содержит нецензурную лексику. Пожалуйста, воздержитесь от мата."
+        )
+    return value
 
 
 class UserRefSerializer(serializers.Serializer):
@@ -62,7 +71,7 @@ class TopicSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Введите название темы (до 120 символов)"
             )
-        return value
+        return check_profanity(value)
 
     def validate_category(self, value):
         if value is None:
@@ -89,4 +98,32 @@ class PostSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Введите сообщение (до 2000 символов)"
             )
-        return value
+        return check_profanity(value)
+
+
+class TopicPatchSerializer(serializers.Serializer):
+    """Частичное обновление темы (PUT /api/topics/:id) — только title."""
+
+    title = serializers.CharField(max_length=120)
+
+    def validate_title(self, value):
+        value = (value or "").strip()
+        if not value or len(value) > 120:
+            raise serializers.ValidationError(
+                "Введите название темы (до 120 символов)"
+            )
+        return check_profanity(value)
+
+
+class PostPatchSerializer(serializers.Serializer):
+    """Частичное обновление сообщения (PUT /api/posts/:id) — только text."""
+
+    text = serializers.CharField(max_length=2000)
+
+    def validate_text(self, value):
+        value = (value or "").strip()
+        if not value or len(value) > 2000:
+            raise serializers.ValidationError(
+                "Введите сообщение (до 2000 символов)"
+            )
+        return check_profanity(value)

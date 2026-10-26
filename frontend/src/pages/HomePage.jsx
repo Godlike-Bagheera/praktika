@@ -88,9 +88,15 @@ export default function HomePage() {
     }
   }
 
+  // Поиск категорий в реальном времени (клиентская фильтрация)
+  const [query, setQuery] = useState('');
+  const filtered = query.trim()
+    ? categories.filter((c) => c.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : categories;
+
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex justify-content-between align-items-center mb-3">
         <h1 className="h3 mb-0 page-title">Категории</h1>
         {isAdmin && (
           <button className="btn btn-primary" onClick={openCreate}>
@@ -99,50 +105,63 @@ export default function HomePage() {
         )}
       </div>
 
+      <input
+        className="form-control mb-4 search-input"
+        placeholder="Поиск по названию категории..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        aria-label="Поиск категорий"
+      />
+
       <Alert>{error}</Alert>
 
       {loading ? (
         <Spinner />
       ) : categories.length === 0 ? (
         <div className="empty-state">Пока нет категорий</div>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">Ничего не найдено по запросу «{query}»</div>
       ) : (
         <div className="row g-3">
-          {categories.map((cat) => (
+          {filtered.map((cat) => (
             <div key={cat.id} className="col-md-6 col-lg-4">
-              <div className="card h-100 card-hover shadow-sm">
+              <div className="card h-100 card-hover shadow-sm position-relative">
                 <div className="card-body d-flex flex-column">
                   <div className="d-flex align-items-center gap-3">
                     <span className="cat-icon">{cat.name.charAt(0).toUpperCase()}</span>
                     <Link
                       to={`/categories/${cat.id}`}
-                      className="stretched-link text-decoration-none fw-semibold fs-5 text-dark"
+                      className="text-decoration-none fw-semibold fs-5 text-dark category-link"
                     >
                       {cat.name}
                     </Link>
                   </div>
                   <div className="text-muted-small mt-2">Создана: {new Date(cat.created_at).toLocaleDateString('ru-RU')}</div>
-                  {isAdmin && (
-                    <div className="mt-3 d-flex gap-2">
-                      <button
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          openEdit(cat);
-                        }}
+                  <div className="mt-auto pt-3">
+                    {isAdmin ? (
+                      <div className="d-flex gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => openEdit(cat)}
+                        >
+                          Редактировать
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => remove(cat)}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    ) : (
+                      <Link
+                        to={`/categories/${cat.id}`}
+                        className="btn btn-sm btn-outline-primary w-100"
                       >
-                        Редактировать
-                      </button>
-                      <button
-                        className="btn btn-sm btn-outline-danger"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          remove(cat);
-                        }}
-                      >
-                        Удалить
-                      </button>
-                    </div>
-                  )}
+                        Открыть
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
