@@ -5,7 +5,7 @@ from .profanity import contains_profanity
 
 
 def check_profanity(value: str) -> str:
-    if contains_profanity(value):
+    if contains_profanity(value, strict=True):
         raise serializers.ValidationError(
             "Сообщение содержит нецензурную лексику. Пожалуйста, воздержитесь от мата."
         )
