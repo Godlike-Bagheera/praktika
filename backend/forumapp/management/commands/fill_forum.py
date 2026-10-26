@@ -15,7 +15,22 @@ from django.db import transaction
 from accounts.models import User
 from forumapp.models import Category, Post, Topic
 
-CATEGORIES = [
+EXTRA_USERNAMES = [
+    "alpha_tester", "bit_flip", "code_ninja", "data_miner", "echo_loop",
+    "fire_wall", "git_pusher", "hash_table", "io_stream", "json_lover",
+    "k8s_captain", "log_tailer", "mem_leak", "node_runner", "ops_wizard",
+    "pipe_dream", "query_plan", "regex_master", "ssl_kid", "tcp_sync",
+    "ui_designer", "vim_user", "web_crawler", "xml_parser", "yield_gen",
+    "zero_day", "async_await", "batch_proc", "cache_hit", "docker_fan",
+    "env_var", "fork_bomb", "grep_guru", "http_head", "init_sys", "job_queue",
+    "kube_pod", "lambda_fn", "mutex_lock", "npm_inst", "octal_perm",
+    "ping_resp", "queue_full", "rsync_fast", "shell_pro", "thread_pool",
+    "unix_time", "vm_guest", "wasm_dev", "xhr_open", "yaml_conf", "zip_bomb",
+]
+
+# Категории + темы. Первая буква списка CATEGORIES — обязательный порядок
+# для старых 12 категорий; новые добавлены в конец.
+CATEGORY_TITLES = [
     "Общий раздел",
     "Программирование",
     "Веб-разработка",
@@ -28,7 +43,26 @@ CATEGORIES = [
     "Флудилка",
     "Мобильная разработка",
     "Безопасность",
+    "JavaScript и TypeScript",
+    "Java и Kotlin",
+    "C++ и C#",
+    "Go и Rust",
+    "DevOps и CI/CD",
+    "Облака и хостинг",
+    "Сети и протоколы",
+    "Искусственный интеллект",
+    "Machine Learning",
+    "Git и системы контроля версий",
+    "Тестирование ПО",
+    "Карьера и собеседования",
+    "Книги и курсы",
+    "Железо и сборка ПК",
+    "Операционные системы",
+    "Виртуализация и Docker",
+    "API и микросервисы",
+    "Frontend фреймворки",
 ]
+CATEGORIES = list(CATEGORY_TITLES)
 
 USERNAMES = [
     "coder_42", "neon_viper", "sunny_day", "dark_horse", "pixel_witch",
@@ -36,6 +70,7 @@ USERNAMES = [
     "cyber_cat", "green_toad", "lucky_star", "thunder_bird", "quiet_storm",
     "dev_null", "kernel_panic", "null_pointer", "sudo_maker", "root_access",
     "binary_soul", "hex_dump", "stack_overflow", "seg_fault", "daemon_prc",
+    *EXTRA_USERNAMES,
 ]
 
 TOPICS_BY_CATEGORY = {
@@ -134,6 +169,117 @@ TOPICS_BY_CATEGORY = {
         "HTTPS: Let's Encrypt за 10 минут",
         "Утечки данных: чек-лист для разработчика",
     ],
+    # --- Новые категории (18 шт.) ---
+    "JavaScript и TypeScript": [
+        "TypeScript: стоит ли переходить с JavaScript?",
+        "Промисы и async/await — разбор полётов",
+        "Модули ES6 против CommonJS",
+        "Замыкания простыми словами",
+        "Сборка проектов: Vite vs Webpack",
+    ],
+    "Java и Kotlin": [
+        "Java или Kotlin для Android в 2026?",
+        "Spring Boot: первый проект за вечер",
+        "GC в Java: как настроить паузы",
+        "Корутинки в Kotlin без боли",
+    ],
+    "C++ и C#": [
+        "C++20: что нового и нужно ли обновляться",
+        "Unity и C#: типичные грабли новичков",
+        "Умные указатели в C++ — шпаргалка",
+        ".NET MAUI или Xamarin?",
+    ],
+    "Go и Rust": [
+        "Go vs Python для бэкенда",
+        "Rust: borrow checker сводит с ума, но это того стоит",
+        "Горутины и каналы на практике",
+        "Actix vs Rocket: веб-фреймворки Rust",
+    ],
+    "DevOps и CI/CD": [
+        "GitHub Actions: автотесты и деплой",
+        "GitLab CI против Jenkins — что выбрать",
+        "Инфраструктура как код: Terraform basics",
+        "Мониторинг: Prometheus + Grafana за час",
+        "Логирование централизованное: Loki vs ELK",
+    ],
+    "Облака и хостинг": [
+        "AWS Lightsail против VPS — где дешевле",
+        "Cloudflare: бесплатная защита сайта",
+        "Российские облака: опыт переезда",
+        "Дёшево поднять сервер для пет-проекта",
+    ],
+    "Сети и протоколы": [
+        "HTTP/3 и QUIC: что меняется",
+        "DNS как работает по шагам",
+        "NAT, IPv4 и дефицит адресов",
+        "Wireshark для начинающего сетевика",
+    ],
+    "Искусственный интеллект": [
+        "LLM локально: Ollama на своём железе",
+        "Промпт-инжиниринг: приёмы и шаблоны",
+        "ChatGPT vs открытые модели — сравнение",
+        "AI в разработке: ускоряет или мешает?",
+    ],
+    "Machine Learning": [
+        "Первая модель классификации на scikit-learn",
+        "PyTorch или TensorFlow в 2026?",
+        "Переобучение: как диагностировать и лечить",
+        "Датасеты: где искать данные для проекта",
+    ],
+    "Git и системы контроля версий": [
+        "git rebase против merge — вечный спор",
+        "Хук pre-commit: проверяем код до коммита",
+        "Разрешаем конфликты без паники",
+        "Стратегии ветвления: GitFlow и trunk-based",
+    ],
+    "Тестирование ПО": [
+        "Юнит vs интеграционные тесты: баланс",
+        "pytest: фикстуры и моки",
+        "Автотесты UI: Playwright против Cypress",
+        "Покрытие 100% — благо или вред?",
+    ],
+    "Карьера и собеседования": [
+        "Резюме разработчика: что реально читают",
+        "Собеседование на junior: вопросы и ответы",
+        "Как просить повышение зарплаты",
+        "Удалёнка vs офис: опыт пяти лет",
+    ],
+    "Книги и курсы": [
+        "Книги по алгоритмам: с чего начать",
+        "Курс «Чистый код»: стоит ли времени",
+        "Что почитать про системный дизайн",
+        "Подборка бесплатных курсов 2026",
+    ],
+    "Железо и сборка ПК": [
+        "Сборка рабочего ПК до 50 тысяч",
+        "SSD NVMe против SATA: разница в реальных задачах",
+        "Охлаждение: воздух или вода?",
+        "Ноутбук для программирования: критерии выбора",
+    ],
+    "Операционные системы": [
+        "Arch Linux: зачем нужен ручной путь",
+        "Windows vs Linux для разработки",
+        "macOS: плюсы и минусы для кодера",
+        "BSD-системы: ниша или будущее?",
+    ],
+    "Виртуализация и Docker": [
+        "Docker Compose: связываем контейнеры правильно",
+        "Kubernetes для одного приложения — оверкилл?",
+        "Proxmox: домашний гипервизор",
+        "Оптимизация образов: multi-stage build",
+    ],
+    "API и микросервисы": [
+        "REST vs GraphQL — когда что брать",
+        "Спринг-контроль версий API",
+        "Микросервисы: границы и взаимодействие",
+        "gRPC: производительность и сложность",
+    ],
+    "Frontend фреймворки": [
+        "React 19: обзор новинок",
+        "Next.js App Router — гид для новичка",
+        "Angular vs React: честное сравнение",
+        "Solid.js: быстрый и недооценённый",
+    ],
 }
 
 POST_TEXTS = [
@@ -186,7 +332,7 @@ class Command(BaseCommand):
         parser.add_argument("--admin-email", default="admin@gmail.com")
         parser.add_argument("--admin-username", default="admin")
         parser.add_argument("--admin-password", default="admin")
-        parser.add_argument("--users", type=int, default=25)
+        parser.add_argument("--users", type=int, default=60)
         parser.add_argument("--user-password", default="Demo12345")
         parser.add_argument("--seed", type=int, default=42)
         parser.add_argument(
