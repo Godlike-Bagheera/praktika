@@ -1,0 +1,478 @@
+"""Views for the Forum API."""
+import datetime
+import re
+
+from django.db.models import Count, Q
+from django.http import HttpResponse
+from rest_framework import status
+from rest_framework.decorators import (
+    api_view, authentication_classes, permission_classes, throttle_classes,
+)
+from rest_framework.exceptions import APIException, NotFound, PermissionDenied
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from accounts.serializers import (
+    LoginSerializer,
+    MeSerializer,
+    PostPatchSerializer,
+    RegisterSerializer,
+    TopicPatchSerializer,
+)
+from .models import Category, Post, Topic
+from .pagination import ForumPagination
+from .permissions import IsAdmin, OwnerOrAdminDelete, OwnerOnlyEdit
+from .serializers import CategorySerializer, PostSerializer, TopicSerializer
+
+# ---------------------------------------------------------------------------
+# Rate limiting: no more than 10 login attempts per minute from one IP.
+# Implemented with a LocMem cache bucket (custom middleware-style helper).
+# ---------------------------------------------------------------------------
+_LOGIN_LIMIT = 10
+_LOGIN_WINDOW_SECONDS = 60
+
+
+def _client_ip(request):
+    xff = request.META.get("HTTP_X_FORWARDED_FOR")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
+
+
+def _login_rate_limited(request):
+    """Return True if the IP exceeded the login rate limit; otherwise record
+    a new attempt and return False."""
+    from django.core.cache import cache
+    key = "login_rl:%s" % _client_ip(request)
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
+    bucket = cache.get(key)
+    if not bucket:
+        bucket = {"count": 0, "start": now.isoformat()}
+    start = datetime.datetime.fromisoformat(bucket["start"])
+    if (now - start).total_seconds() > _LOGIN_WINDOW_SECONDS:
+        bucket = {"count": 0, "start": now.isoformat()}
+    if bucket["count"] >= _LOGIN_LIMIT:
+        return True
+    bucket["count"] += 1
+    # store for the remainder of the window
+    ttl = max(1, _LOGIN_WINDOW_SECONDS - int((now - start).total_seconds()))
+    cache.set(key, bucket, ttl)
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Healthcheck — accessible to everyone (even guests)
+# ---------------------------------------------------------------------------
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def health_view(request):
+    return Response({"status": "ok"})
+
+
+# ---------------------------------------------------------------------------
+# Authentication endpoints
+# ---------------------------------------------------------------------------
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class RegisterView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        data = request.data or {}
+        email = str(data.get("email", "")).strip()
+        username = str(data.get("username", "")).strip()
+        password = str(data.get("password", ""))
+        password_confirm = str(data.get("password_confirm", ""))
+
+        errors = {}
+        if not email or not EMAIL_RE.match(email) or len(email) > 254:
+            errors["email"] = "Введите корректный email"
+        elif Category is None:  # pragma: no cover
+            pass
+        if not password_confirm:
+            errors["password_confirm"] = "Пароли не совпадают"
+        elif password != password_confirm:
+            errors["password_confirm"] = "Пароли не совпадают"
+
+        if errors:
+            return Response({"errors": errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = RegisterSerializer(data=data)
+        if not serializer.is_valid():
+            # Map DRF error lists into {"field": "message"}
+            errs = {}
+            for field, msgs in serializer.errors.items():
+                if isinstance(msgs, list):
+                    errs[field] = str(msgs[0])
+                else:
+                    errs[field] = str(msgs)
+            code = status.HTTP_400_BAD_REQUEST
+            # Duplicate email -> 409
+            email_msg = errs.get("email", "")
+            if "занят" in email_msg.lower() or "already" in email_msg.lower():
+                code = status.HTTP_409_CONFLICT
+            return Response({"errors": errs}, status=code)
+
+        user = serializer.save()
+        me = MeSerializer(user).data
+        return Response({"user": me}, status=status.HTTP_201_CREATED)
+
+
+class LoginView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        if _login_rate_limited(request):
+            return Response(
+                {"errors": {"detail": "Слишком много попыток. Попробуйте позже"}},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        serializer = LoginSerializer(data=request.data or {})
+        if not serializer.is_valid():
+            errs = {}
+            for field, msgs in serializer.errors.items():
+                errs[field] = str(msgs[0]) if isinstance(msgs, list) else str(msgs)
+            # non-field errors come under key 'non_field_errors'
+            if "non_field_errors" in errs:
+                errs = {"detail": errs["non_field_errors"]}
+            detail = errs.get("detail", "Неверный email или пароль")
+            if detail == "Неверный email или пароль":
+                return Response({"errors": {"detail": detail}},
+                                status=status.HTTP_401_UNAUTHORIZED)
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        from rest_framework_simplejwt.tokens import RefreshToken
+        user = serializer.validated_data["user"]
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+            "user": MeSerializer(user).data,
+        })
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh_token = (request.data or {}).get("refresh")
+        if not refresh_token:
+            return Response(
+                {"errors": {"detail": "Не передан refresh-токен"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()  # добавляет jti в blacklist
+        except Exception:
+            return Response(
+                {"errors": {"detail": "Некорректный токен"}},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(MeSerializer(request.user).data)
+
+
+# ---------------------------------------------------------------------------
+# Categories (admin-only write, authenticated read)
+# ---------------------------------------------------------------------------
+class CategoryListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            return [IsAuthenticated(), IsAdmin()]
+        return [IsAuthenticated()]
+
+    def get(self, request):
+        qs = Category.objects.all()
+        return Response(CategorySerializer(qs, many=True).data)
+
+    def post(self, request):
+        serializer = CategorySerializer(data=request.data or {})
+        if not serializer.is_valid():
+            errs = {f: (v[0] if isinstance(v, list) else v)
+                    for f, v in serializer.errors.items()}
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class CategoryDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get_object(self, pk):
+        obj = Category.objects.filter(pk=pk).first()
+        if obj is None:
+            raise NotFound("Категория не найдена")
+        return obj
+
+    def put(self, request, pk):
+        obj = self.get_object(pk)
+        serializer = CategorySerializer(obj, data=request.data or {}, partial=False)
+        if not serializer.is_valid():
+            errs = {f: (v[0] if isinstance(v, list) else v)
+                    for f, v in serializer.errors.items()}
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        self.get_object(pk).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Topics
+# ---------------------------------------------------------------------------
+class TopicListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Topic.objects.select_related("category", "owner").annotate(
+            posts_count=Count("posts", distinct=True)
+        )
+        category = request.query_params.get("category")
+        if category:
+            qs = qs.filter(category_id=category)
+        search = request.query_params.get("search")
+        if search:
+            qs = qs.filter(title__icontains=search)
+        qs = qs.order_by("-created_at")
+        paginator = ForumPagination()
+        page = paginator.paginate_queryset(qs, request)
+        serializer = TopicSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    def post(self, request):
+        data = dict(request.data or {})
+        serializer = TopicSerializer(data=data)
+        if not serializer.is_valid():
+            errs = {f: (v[0] if isinstance(v, list) else v)
+                    for f, v in serializer.errors.items()}
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+        topic = serializer.save(owner=request.user)
+        return Response(TopicSerializer(topic).data,
+                        status=status.HTTP_201_CREATED)
+
+
+class TopicDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        obj = Topic.objects.select_related("category", "owner").annotate(
+            posts_count=Count("posts", distinct=True)
+        ).filter(pk=pk).first()
+        if obj is None:
+            raise NotFound("Тема не найдена")
+        return obj
+
+    def get(self, request, pk):
+        obj = self.get_object(pk)
+        return Response(TopicSerializer(obj).data)
+
+    def put(self, request, pk):
+        obj = self.get_object(pk)
+        # Редактировать тему может только её владелец (не админ для чужих)
+        if obj.owner_id != request.user.id:
+            raise PermissionDenied("Нельзя редактировать чужую тему")
+        serializer = TopicPatchSerializer(data=dict(request.data or {}))
+        if not serializer.is_valid():
+            errs = {f: (v[0] if isinstance(v, list) else v)
+                    for f, v in serializer.errors.items()}
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+        obj.title = serializer.validated_data["title"]
+        obj.save(update_fields=["title", "updated_at"])
+        return Response(TopicSerializer(obj).data)
+
+    def delete(self, request, pk):
+        obj = self.get_object(pk)
+        if obj.owner_id != request.user.id and not IsAdmin.has_permission(
+                IsAdmin(), self, request):
+            raise PermissionDenied("Нельзя удалить чужую тему")
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# Nested posts collection under a topic
+class TopicPostsListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_topic(self, pk):
+        topic = Topic.objects.filter(pk=pk).first()
+        if topic is None:
+            raise NotFound("Тема не найдена")
+        return topic
+
+    def get(self, request, pk):
+        topic = self.get_topic(pk)
+        qs = Post.objects.filter(topic=topic).select_related("owner")
+        search = request.query_params.get("search")
+        if search:
+            qs = qs.filter(Q(text__icontains=search))
+        qs = qs.order_by("created_at", "id")
+        paginator = ForumPagination()
+        page = paginator.paginate_queryset(qs, request)
+        return paginator.get_paginated_response(
+            PostSerializer(page, many=True).data
+        )
+
+    def post(self, request, pk):
+        topic = self.get_topic(pk)
+        data = dict(request.data or {})
+        data.pop("topic", None)
+        serializer = PostSerializer(data=data)
+        if not serializer.is_valid():
+            errs = {f: (v[0] if isinstance(v, list) else v)
+                    for f, v in serializer.errors.items()}
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+        post = serializer.save(topic=topic, owner=request.user)
+        return Response(PostSerializer(post).data,
+                        status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Posts (standalone edit/delete)
+# ---------------------------------------------------------------------------
+class PostDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk):
+        obj = Post.objects.select_related("owner", "topic").filter(pk=pk).first()
+        if obj is None:
+            raise NotFound("Сообщение не найдено")
+        return obj
+
+    def get(self, request, pk):
+        return Response(PostSerializer(self.get_object(pk)).data)
+
+    def put(self, request, pk):
+        obj = self.get_object(pk)
+        # Редактировать сообщение может только владелец
+        if obj.owner_id != request.user.id:
+            raise PermissionDenied("Нельзя редактировать чужое сообщение")
+        serializer = PostPatchSerializer(data=dict(request.data or {}))
+        if not serializer.is_valid():
+            errs = {f: (v[0] if isinstance(v, list) else v)
+                    for f, v in serializer.errors.items()}
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+        obj.text = serializer.validated_data["text"]
+        obj.save(update_fields=["text", "updated_at"])
+        return Response(PostSerializer(obj).data)
+
+    def delete(self, request, pk):
+        obj = self.get_object(pk)
+        is_admin = getattr(request.user, "is_admin_role", False)
+        if obj.owner_id != request.user.id and not is_admin:
+            raise PermissionDenied("Нельзя удалить чужое сообщение")
+        obj.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Excel export
+# ---------------------------------------------------------------------------
+def _clean_formula(value):
+    """Защита от инъекций формул: значения, начинающиеся с = + - @,
+    записываются с апострофом в начале."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+        return "'" + value
+    return value
+
+
+class PostsExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+        from openpyxl.utils import get_column_letter
+
+        user = request.user
+        is_admin = getattr(user, "is_admin_role", False)
+        qs = Post.objects.select_related("owner", "topic")
+        if not is_admin:
+            qs = qs.filter(owner=user)
+        topic = request.query_params.get("topic")
+        if topic:
+            qs = qs.filter(topic_id=topic)
+        search = request.query_params.get("search")
+        if search:
+            qs = qs.filter(text__icontains=search)
+        qs = qs.order_by("created_at", "id")
+
+        count = qs.count()
+        if count > 10000:
+            return Response(
+                {"errors": {"detail": "Слишком много записей для экспорта "
+                                      "(максимум 10 000)"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Сообщения"
+
+        headers = ["ID", "Тема", "Автор", "Текст", "Дата создания"]
+        ws.append(headers)
+        bold = Font(bold=True)
+        for cell in ws[1]:
+            cell.font = bold
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = f"A1:E{max(count + 1, 2)}"
+
+        date_fmt = "DD.MM.YYYY"
+        widths = [len(h) for h in headers]
+        for p in qs.iterator():
+            created = datetime.datetime.combine(
+                p.created_at.date(), p.created_at.time()
+            )
+            row = [
+                p.id,
+                _clean_formula(p.topic.title),
+                _clean_formula(p.owner.username),
+                _clean_formula(p.text),
+                created,
+            ]
+            ws.append(row)
+            ws.cell(row=ws.max_row, column=5).number_format = date_fmt
+            for i, val in enumerate(row, start=1):
+                s = str(val) if not isinstance(val, datetime.datetime) else \
+                    val.strftime(date_fmt)
+                if widths[i - 1] < len(s):
+                    widths[i - 1] = min(len(s), 80)
+
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = w + 2
+
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        filename = f"forum_posts_{today}.xlsx"
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument."
+                         "spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        wb.save(response)
+        return response

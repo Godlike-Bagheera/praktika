@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${DB_NAME:-forumdb}
+      POSTGRES_USER: ${DB_USER:-forumuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-forumuser} -d ${DB_NAME:-forumdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  nginx:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8084:80"
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
