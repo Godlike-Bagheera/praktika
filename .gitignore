@@ -21,3 +21,8 @@ Thumbs.db
 forum_backup_*/
 forum_backup_*.tar.gz
 pgdata.tar.gz
+
+# резервные копии
+forum_backup_*/
+forum_backup_*.tar.gz
+*.ova

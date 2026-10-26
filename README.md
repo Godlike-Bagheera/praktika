@@ -94,6 +94,41 @@ docker compose ps                    # три сервиса в состояни
 
 Данные сохраняются в volume `pgdata` — `docker compose restart` и перезагрузка VM не теряют пользователей, категории, темы и сообщения.
 
+
+## Перенос проекта на новый компьютер (автоматически)
+
+**Сохранение всего (на текущем сервере, внутри ВМ):**
+```bash
+cd praktika && git pull
+bash scripts/one_command.sh <пароль_docker_hub>
+```
+Скрипт сам: проверит контейнеры, сделает SQL-дамп базы + .env в архив
+`forum_backup_<дата>.tar.gz`, соберёт и запушит образы app/nginx на Docker Hub
+(testbagheera666/forum-app, testbagheera666/forum-nginx), положит инструкцию
+восстановления внутрь архива.
+
+Для ПОЛНОЙ копии всей виртуальной машины (ОС + Docker + данные 1-в-1):
+выключи ВМ и на Windows выполни:
+```powershell
+VBoxManage export "<Имя_ВМ>" --output forum_full.ova
+```
+(имя смотри через `VBoxManage list vms`). На новом ПК: VirtualBox → File → Import Appliance.
+
+**Развёртывание на НОВОМ компьютере (нужна только Ubuntu/Linux с git):**
+```bash
+git clone https://github.com/Godlike-Bagheera/praktika && cd praktika
+bash scripts/deploy_new_pc.sh /путь/к/forum_backup_<дата>.tar.gz
+```
+Скрипт сам установит Docker, восстановит .env и базу из дампа, подставит новый IP
+в ALLOWED_HOSTS/CSRF, запустит контейнеры, проверит /health и выведет адрес сайта.
+Без аргумента — чистый запуск с автоматическим демо-наполнением.
+Флаг `--hub` — использовать готовые образы с Docker Hub без сборки.
+
+Последний ручной шаг (только при NAT VirtualBox, на Windows-хосте):
+```powershell
+VBoxManage controlvm "<Имя_ВМ>" natpf1 "forum,tcp,,8084,,8084"
+```
+
 ## Скриншоты основных экранов
 
 > Скриншоты делаются после развёртывания (файлы в `docs/screenshots/`):
