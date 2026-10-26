@@ -27,6 +27,7 @@ export function AuthProvider({ children }) {
     async function check() {
       if (!tokenStore.access) {
         logoutLocal();
+        if (!cancelled) setBooting(false);
         return;
       }
       try {
