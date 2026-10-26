@@ -1,0 +1,243 @@
+"""Массовое наполнение форума демо-контентом.
+
+Создаёт администраторов из переданных email, пул пользователей,
+категории, темы и сообщения (включая длинные треды для проверки
+пагинации по 20 сообщений на страницу).
+
+Использование:
+    python manage.py fill_forum --admin-email admin@gmail.com --admin-password admin
+"""
+import random
+
+from django.core.management.base import BaseCommand
+from django.db import transaction
+
+from accounts.models import User
+from forumapp.models import Category, Post, Topic
+
+CATEGORIES = [
+    "Общий раздел",
+    "Программирование",
+    "Веб-разработка",
+    "Python и Django",
+    "Базы данных",
+    "Linux и сервера",
+    "Помощь и вопросы",
+    "Объявления",
+    "Игры",
+    "Флудилка",
+]
+
+USERNAMES = [
+    "coder_42", "neon_viper", "sunny_day", "dark_horse", "pixel_witch",
+    "byte_master", "quantum_fox", "iron_panda", "swift_river", "moon_walker",
+    "cyber_cat", "green_toad", "lucky_star", "thunder_bird", "quiet_storm",
+]
+
+TOPICS_BY_CATEGORY = {
+    "Общий раздел": [
+        "Добро пожаловать на форум!",
+        "Правила форума — прочитайте перед публикацией",
+        "Представьтесь в этой теме",
+        "Как у вас настроение сегодня?",
+        "Какие сайты посещаете каждый день?",
+    ],
+    "Программирование": [
+        "С какого языка начать изучение программирования?",
+        "Best practices для чистого кода",
+        "Как проходить собеседования по алгоритмам",
+        "Git: полезные команды, о которых вы не знали",
+        "Ошибки новичков при первом пет-проекте",
+        "Стоит ли учить Rust в 2026 году?",
+    ],
+    "Веб-разработка": [
+        "React vs Vue vs Svelte — что выбрать?",
+        "Tailwind или обычный CSS?",
+        "Как ускорить загрузку страницы",
+        "JWT против сессий: что безопаснее?",
+        "Прокси и CORS при локальной разработке",
+    ],
+    "Python и Django": [
+        "Django REST Framework: сериализаторы и валидация",
+        "Оптимизация запросов ORM (select_related/prefetch_related)",
+        "Как настроить SimpleJWT и blacklist для logout",
+        "Миграции Django: частые проблемы",
+        "Gunicorn + Nginx: деплой Django приложения",
+    ],
+    "Базы данных": [
+        "PostgreSQL vs MySQL — что использовать?",
+        "Индексы: когда они действительно помогают",
+        "ON DELETE CASCADE: как не потерять данные зря",
+        "Нормализация или денормализация?",
+        "Резервное копирование PostgreSQL в Docker",
+    ],
+    "Linux и сервера": [
+        "Ubuntu Server: базовая настройка после установки",
+        "Docker Compose: связываем контейнеры",
+        "Настройка firewall ufw — какие порты открывать",
+        "Systemd-сервисы: как это работает",
+        "Nginx: reverse proxy для SPA и API",
+    ],
+    "Помощь и вопросы": [
+        "Не открывается сайт по IP виртуальной машины",
+        "Ошибка 502 Bad Gateway при деплое",
+        "Как сменить роль пользователя на администратора",
+        "Почему спиннер загрузки не исчезает?",
+    ],
+    "Объявления": [
+        "Обновление форума: добавлен экспорт в Excel",
+        "План работ на следующий месяц",
+        "Ищем модераторов раздела Программирование",
+    ],
+    "Игры": [
+        "Во что играете в свободное время?",
+        "Подборка инди-игр этого года",
+        "Киберспорт: смотреть или играть?",
+    ],
+    "Флудилка": [
+        "Тред для офтопа",
+        "Поделитесь мемом дня",
+        "Кофе или чай? Вечный спор",
+        "Что послушать во время кодинга?",
+    ],
+}
+
+POST_TEXTS = [
+    "Полностью поддерживаю автора темы, сам столкнулся с этим недавно.",
+    "Отличный вопрос! У меня есть пара мыслей на этот счёт.",
+    "Могу посоветовать официальную документацию — там всё подробно расписано.",
+    "У меня было ровно так же, пока я не перепробовал три разных подхода.",
+    "Спасибо, очень полезно! Сохранил тему в закладки.",
+    "Не согласен — зависит от конкретной задачи и контекста проекта.",
+    "Попробуйте разбить проблему на части и проверить каждую отдельно.",
+    "Это классическая ошибка, встречается у большинства новичков.",
+    "Кстати, в последней версии это уже исправили, обновитесь.",
+    "+1, хотел написать то же самое.",
+    "Приведу пример из своей практики: на продакшене используем именно такой стек.",
+    "А можно подробнее? Не совсем понял, к чему вы клоните.",
+    "Лучший способ разобраться — сделать свой мини-проект по этой теме.",
+    "Главное не сдаваться, через месяц станет заметно легче.",
+    "Есть нюанс: на Windows это работает иначе, чем на Linux.",
+    "Ссылка на решение: поищите по ключевым словам из сообщения выше.",
+    "Проверьте логи, там почти всегда видна настоящая причина ошибки.",
+    "Хорошая тема, давно пора было её поднять.",
+    "IMHO, стоит добавить больше примеров кода.",
+    "Работает! Спасибо огромное, потратил на эту проблему весь вечер.",
+    "Автор, уточните версию — поведение сильно отличается между релизами.",
+    "Использую третий год подряд, проблем не возникало.",
+    "Кажется, вы имеете в виду немного другое. Уточню свою мысль...",
+    "Отличная подборка, добавил себе в заметки.",
+]
+
+REPLY_PREFIXES = [
+    "", "Согласен. ", "Небольшое дополнение: ", "По опыту скажу — ",
+    "Важный момент: ", "К тому же, ", "Актуализирую тему: ",
+]
+
+
+class Command(BaseCommand):
+    help = "Массово наполняет форум категориями, темами и сообщениями"
+
+    def add_arguments(self, parser):
+        parser.add_argument("--admin-email", default="admin@gmail.com")
+        parser.add_argument("--admin-username", default="admin")
+        parser.add_argument("--admin-password", default="admin")
+        parser.add_argument("--users", type=int, default=15)
+        parser.add_argument("--user-password", default="Demo12345")
+        parser.add_argument("--seed", type=int, default=42)
+
+    @transaction.atomic
+    def handle(self, *args, **options):
+        rng = random.Random(options["seed"])
+        n_users = max(3, options["users"])
+
+        # --- Администратор ---
+        admin = User.objects.filter(email__iexact=options["admin_email"]).first()
+        if admin is None:
+            admin = User.objects.create_superuser(
+                email=options["admin_email"],
+                username=options["admin_username"],
+                password=options["admin_password"],
+            )
+            self.stdout.write(self.style.SUCCESS(
+                f"Создан администратор: {admin.email} / {options['admin_password']}"
+            ))
+        else:
+            admin.role = User.Role.ADMIN
+            admin.is_staff = True
+            admin.is_superuser = True
+            admin.set_password(options["admin_password"])
+            admin.save()
+            self.stdout.write(
+                f"Администратор {admin.email} найден, роль и пароль обновлены"
+            )
+
+        # --- Пользователи ---
+        users = [admin]
+        created_users = 0
+        for i, uname in enumerate(USERNAMES[:n_users]):
+            u = User.objects.filter(username=uname).first()
+            if u is None:
+                u = User.objects.create_user(
+                    email=f"{uname}@example.com",
+                    username=uname,
+                    password=options["user_password"],
+                )
+                created_users += 1
+            users.append(u)
+        self.stdout.write(self.style.SUCCESS(
+            f"Пользователей в базе (с админами): {len(users)}, новых создано: {created_users}"
+        ))
+
+        # --- Категории ---
+        cats = {}
+        new_cats = 0
+        for name in CATEGORIES:
+            cat = Category.objects.filter(name__iexact=name).first()
+            if cat is None:
+                cat = Category.objects.create(name=name)
+                new_cats += 1
+            cats[name] = cat
+        self.stdout.write(self.style.SUCCESS(
+            f"Категорий: {len(cats)} (новых создано: {new_cats})"
+        ))
+
+        # --- Темы и сообщения ---
+        new_topics = 0
+        new_posts = 0
+        for cat_name, titles in TOPICS_BY_CATEGORY.items():
+            cat = cats[cat_name]
+            for title in titles:
+                topic = Topic.objects.filter(category=cat, title=title).first()
+                if topic is not None:
+                    continue
+                owner = rng.choice(users)
+                topic = Topic.objects.create(category=cat, owner=owner, title=title)
+                new_topics += 1
+
+                # Первый пост = автор темы
+                Post.objects.create(
+                    topic=topic, owner=owner,
+                    text=rng.choice(POST_TEXTS).strip(),
+                )
+                new_posts += 1
+
+                n_replies = rng.randint(2, 9)
+                if cat_name == "Общий раздел" and "представьтесь" in title.lower():
+                    n_replies = 25  # длинный тред для проверки пагинации
+                if cat_name == "Флудилка" and title == "Тред для офтопа":
+                    n_replies = 30  # ещё один тред > 20 сообщений
+                for _ in range(n_replies):
+                    author = rng.choice(users)
+                    text = rng.choice(REPLY_PREFIXES) + rng.choice(POST_TEXTS)
+                    if rng.random() < 0.15:
+                        text += " " + rng.choice(POST_TEXTS)
+                    Post.objects.create(topic=topic, owner=author, text=text)
+                    new_posts += 1
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Новых тем создано: {new_topics}, новых сообщений: {new_posts}"
+        ))
+        self.stdout.write(self.style.SUCCESS(
+            "Форум наполнен! Обновите страницу в браузере."
+        ))
