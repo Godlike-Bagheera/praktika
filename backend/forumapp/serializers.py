@@ -19,10 +19,12 @@ class UserRefSerializer(serializers.Serializer):
 
 
 class CategorySerializer(serializers.ModelSerializer):
+    topics_count = serializers.IntegerField(read_only=True, required=False)
+
     class Meta:
         model = Category
-        fields = ["id", "name", "created_at"]
-        read_only_fields = ["id", "created_at"]
+        fields = ["id", "name", "created_at", "topics_count"]
+        read_only_fields = ["id", "created_at", "topics_count"]
 
     def validate_name(self, value):
         value = (value or "").strip()

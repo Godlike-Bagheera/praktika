@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, downloadExport, errorMessage, extractErrors } from '../api';
 import { containsProfanity, PROFANITY_MESSAGE } from '../profanity';
@@ -21,7 +21,13 @@ export default function TopicPage() {
   const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchInput, setSearchInput] = useState(search);
+  // input — контролируемое поле поиска; searchParams обновляются с debounce
+  const [inputValue, setInputValue] = useState(search);
+
+  // синхронизируем поле, если ?search= изменился извне (ссылка/назад)
+  useEffect(() => {
+    setInputValue((prev) => ((prev.trim() === search) ? prev : search));
+  }, [search]);
 
   const [newText, setNewText] = useState('');
   const [postError, setPostError] = useState('');
@@ -59,18 +65,11 @@ export default function TopicPage() {
     loadPosts();
   }, [loadPosts]);
 
-  function applySearch(e) {
-    e.preventDefault();
-    const params = {};
-    if (searchInput.trim()) params.search = searchInput.trim();
-    setSearchParams(params);
-  }
-
-  // Поиск в реальном времени: debounce 400 мс, без нажатия «Найти»
+  // Поиск в реальном времени: debounce 400 мс — запрос к API без нажатия «Найти»
   useEffect(() => {
     const t = setTimeout(() => {
       const current = searchParams.get('search') || '';
-      const wanted = searchInput.trim();
+      const wanted = inputValue.trim();
       if (wanted !== current) {
         const params = {};
         if (wanted) params.search = wanted;
@@ -78,14 +77,7 @@ export default function TopicPage() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Живой фильтр по уже загруженной странице сообщений (мгновенная подсветка)
-  const visiblePosts = useMemo(() => {
-    const q = searchInput.trim().toLowerCase();
-    if (!q) return posts;
-    return posts.filter((p) => p.text.toLowerCase().includes(q));
-  }, [posts, searchInput]);
+  }, [inputValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const profanityWarning = containsProfanity(newText);
 
@@ -224,15 +216,15 @@ export default function TopicPage() {
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <h2 className="h5 mb-0">Сообщения ({count})</h2>
             <div className="d-flex gap-2">
-              <form onSubmit={applySearch} className="d-flex gap-2">
-                <input
-                  className="form-control form-control-sm"
-                  placeholder="Поиск по сообщениям..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
-                <button className="btn btn-sm btn-outline-secondary">Найти</button>
-              </form>
+              <input
+                type="search"
+                className="form-control form-control-sm search-input"
+                placeholder="Поиск по сообщениям..."
+                aria-label="Поиск по сообщениям"
+                style={{ minWidth: 220 }}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+              />
               <button className="btn btn-sm btn-success" onClick={exportExcel} disabled={exporting}>
                 {exporting ? 'Экспорт...' : 'Скачать Excel'}
               </button>
@@ -243,11 +235,11 @@ export default function TopicPage() {
             <Spinner />
           ) : posts.length === 0 ? (
             <div className="empty-state">
-              {search ? 'Ничего не найдено' : 'В теме нет сообщений. Напишите первое!'}
+              {search ? `Ничего не найдено по запросу «${search}»` : 'В теме нет сообщений. Напишите первое!'}
             </div>
           ) : (
             <div className="mb-3">
-              {visiblePosts.map((p) => (
+              {posts.map((p) => (
                 <div key={p.id} className="card post-card shadow-sm mb-2">
                   <div className="card-body py-2 d-flex gap-3">
                     <span className="post-avatar">{p.owner.username.charAt(0).toUpperCase()}</span>

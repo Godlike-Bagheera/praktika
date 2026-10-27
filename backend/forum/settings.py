@@ -97,28 +97,18 @@ TEMPLATES = [
 WSGI_APPLICATION = "forum.wsgi.application"
 
 # --------------------------------------------------------------------------
-# Database: PostgreSQL 16 (SQLite is NOT used)
-# Fallback to sqlite only when DB_ENGINE=sqlite (local testing convenience;
-# production/docker always uses postgres).
+# Database: PostgreSQL 16 (SQLite is NOT used anywhere, including tests)
 # --------------------------------------------------------------------------
-if os.environ.get("DB_ENGINE", "postgres") == "sqlite":
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db_local_test.sqlite3",
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("DB_NAME", "forumdb"),
+        "USER": os.environ.get("DB_USER", "forumuser"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", "changeme"),
+        "HOST": os.environ.get("DB_HOST", "db"),
+        "PORT": os.environ.get("DB_PORT", "5432"),
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("DB_NAME", "forumdb"),
-            "USER": os.environ.get("DB_USER", "forumuser"),
-            "PASSWORD": os.environ.get("DB_PASSWORD", "changeme"),
-            "HOST": os.environ.get("DB_HOST", "db"),
-            "PORT": os.environ.get("DB_PORT", "5432"),
-        }
-    }
+}
 
 # --------------------------------------------------------------------------
 # Auth / user model

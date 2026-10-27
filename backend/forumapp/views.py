@@ -3,7 +3,8 @@ import datetime
 import os
 import re
 
-from django.db.models import Count, Q
+from django.db.models import CharField, Count, Exists, Lookup, OuterRef, Q, TextField
+from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.decorators import (
@@ -279,7 +280,30 @@ class CategoryListCreateView(APIView):
 
     def get(self, request):
         qs = Category.objects.all()
-        return Response(CategorySerializer(qs, many=True).data)
+        # Поиск по названию (частичное совпадение, без учёта регистра)
+        search = request.query_params.get("search")
+        client_wants_paginated = (
+            "page" in request.query_params or "limit" in request.query_params
+        )
+        if not client_wants_paginated:
+            # Обратная совместимость: старые клиенты ждут плоский список.
+            # Если таблица categories ещё не создана (свежая БД до migrate) —
+            # отдаём пустой список вместо 500.
+            try:
+                data = list(qs)
+            except (OperationalError, ProgrammingError):
+                data = []
+            return Response(CategorySerializer(data, many=True).data)
+        if search:
+            qs = qs.filter(_build_search_q(search, ["name"]))
+        qs = qs.annotate(topics_count=Count("topics", distinct=True))
+        # детерминированный порядок для пагинации (ordering модели — name)
+        qs = qs.order_by("name", "id")
+        paginator = ForumPagination()
+        page = paginator.paginate_queryset(qs, request)
+        return paginator.get_paginated_response(
+            CategorySerializer(page, many=True).data
+        )
 
     def post(self, request):
         serializer = CategorySerializer(data=request.data or {})
@@ -332,7 +356,8 @@ class TopicListCreateView(APIView):
             qs = qs.filter(category_id=category)
         search = request.query_params.get("search")
         if search:
-            qs = qs.filter(title__icontains=search)
+            # слова запроса ищем в названии темы ИЛИ в тексте её сообщений
+            qs = qs.filter(_build_search_q_topic(search)).distinct()
         qs = qs.order_by("-created_at")
         paginator = ForumPagination()
         page = paginator.paginate_queryset(qs, request)
@@ -406,7 +431,8 @@ class TopicPostsListView(APIView):
         qs = Post.objects.filter(topic=topic).select_related("owner")
         search = request.query_params.get("search")
         if search:
-            qs = qs.filter(Q(text__icontains=search))
+            # все слова запроса должны присутствовать в тексте сообщения
+            qs = qs.filter(_build_search_q(search, ["text"]))
         qs = qs.order_by("created_at", "id")
         paginator = ForumPagination()
         page = paginator.paginate_queryset(qs, request)
@@ -469,8 +495,105 @@ class PostDetailView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# Excel export
+# Поиск (search)
 # ---------------------------------------------------------------------------
+# Поиск должен быть регистронезависимым в том числе для кириллицы.
+# Django `icontains` строит UPPER(col) LIKE ...%UPPER(pattern)% ESCAPE,
+# что на некоторых локалях/коллпейшенах ломает частичное совпадение.
+# Поэтому используется свой lookup `unilike`: LOWER(col) LIKE LOWER(pattern),
+# с экранированием спецсимволов LIKE (% _ \) в запросе.
+# ---------------------------------------------------------------------------
+
+
+class UniLikeLookup(Lookup):
+    """Регистронезависимый «содержит» (Unicode-safe)."""
+    lookup_name = "unilike"
+
+    def as_sql(self, compiler, connection):
+        lhs, lhs_params = self.process_lhs(compiler, connection)
+        rhs, rhs_params = self.process_rhs(compiler, connection)
+        return f"LOWER({lhs}) LIKE LOWER({rhs}) ESCAPE '\\'", (
+            list(lhs_params) + list(rhs_params))
+
+
+CharField.register_lookup(UniLikeLookup)
+TextField.register_lookup(UniLikeLookup)
+
+
+def _contains_q(field, value):
+    """Q для регистронезависимого «содержит» (Unicode-safe, PostgreSQL).
+
+    Экранируем спецсимволы LIKE (%, _, \\), чтобы поисковый запрос
+    интерпретировался как обычный текст."""
+    escaped = re.sub(r"([%_\\])", r"\\\1", value or "")
+    return Q(**{field + "__unilike": "%" + escaped + "%"})
+
+
+def _search_words(query):
+    """Разбивает поисковый запрос на слова (по 2+ символа)."""
+    return [w for w in re.split(r"\s+", (query or "").strip()) if len(w) >= 2]
+
+
+def _build_search_q(query, fields):
+    """Строит Q для «хорошего» поиска: каждое слово запроса должно
+    встречаться в одном из полей (AND между словами — как в Google).
+    Совпадение регистронезависимое и частичное (Unicode-safe).
+    Если слов нет (запрос короче 2 символов) — поиск по всей строке."""
+    words = _search_words(query) or ([query.strip()] if query and query.strip() else [])
+    result = Q()
+    for w in words:
+        word_q = Q()
+        for f in fields:
+            word_q |= _contains_q(f, w)
+        result &= word_q
+    return result
+
+
+def _topics_with_all_words_in_posts(words):
+    """id тем, в СООБЩЕНИЯХ которых встречаются все слова запроса.
+
+    Сначала SQL-фильтр по первому (обычно самому редкому) слову — он
+    отсекает большинство сообщений; затем пересечение topic_id по остальным
+    словам (покрывает и случай «все слова в одном сообщении», и случай
+    «слова в разных сообщениях одной темы»)."""
+    ids = set(Post.objects.filter(_contains_q("text", words[0]))
+              .values_list("topic_id", flat=True))
+    for w in words[1:]:
+        if not ids:
+            break
+        ids &= set(Post.objects.filter(Q(topic_id__in=ids) & _contains_q("text", w))
+                   .values_list("topic_id", flat=True))
+    return list(ids)
+
+
+def _build_search_q_topic(query):
+    """Поиск тем: все слова запроса должны встречаться либо в названии темы,
+    либо в текстах сообщений одной и той же темы.
+
+    ВАЖНО: условие по posts__text оборачивается в подзапрос Exists, а не
+    используется как JOIN-условие в основном queryset — иначе .distinct()
+    на уровне SQL не схлопывает строки (разные joined-строки различаются),
+    и пагинация теряет нужную тему.
+    """
+    words = _search_words(query)
+    if not words:
+        return Q(Exists(
+            Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", query))
+        ))
+    title_q = Q()
+    for w in words:
+        title_q &= _contains_q("title", w)
+    # одна тема должна содержать ВСЕ слова в своих сообщениях
+    posts_all = Q(Exists(
+        Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", words[0]))
+    ))
+    for w in words[1:]:
+        posts_all &= Q(Exists(
+            Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", w))
+        ))
+    return title_q | posts_all
+
+
 def _clean_formula(value):
     """Защита от инъекций формул: значения, начинающиеся с = + - @,
     записываются с апострофом в начале."""
@@ -497,7 +620,7 @@ class PostsExportView(APIView):
             qs = qs.filter(topic_id=topic)
         search = request.query_params.get("search")
         if search:
-            qs = qs.filter(text__icontains=search)
+            qs = qs.filter(_build_search_q(search, ["text"]))
         qs = qs.order_by("created_at", "id")
 
         count = qs.count()

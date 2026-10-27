@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api, errorMessage, extractErrors } from '../api';
 import { useAuth } from '../AuthContext';
 import Alert from '../components/Alert';
+import Pagination from '../components/Pagination';
 import Spinner from '../components/Spinner';
+
+const PAGE_LIMIT = 12; // категорий на странице (сетка 3 колонки x 4 ряда)
 
 export default function HomePage() {
   const { isAdmin } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const search = searchParams.get('search') || '';
+
   const [categories, setCategories] = useState([]);
+  const [count, setCount] = useState(0);
+  const [limit, setLimit] = useState(PAGE_LIMIT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -22,14 +31,26 @@ export default function HomePage() {
     setLoading(true);
     setError('');
     try {
-      const resp = await api.get('/categories');
-      setCategories(resp.data);
+      const resp = await api.get('/categories', {
+        params: { page, limit: PAGE_LIMIT, search: search || undefined },
+      });
+      const data = resp.data;
+      // Сервер может ответить как пагинированным объектом, так и плоским
+      // списком (обратная совместимость) — нормализуем оба формата
+      if (Array.isArray(data)) {
+        setCategories(data);
+        setCount(data.length);
+      } else {
+        setCategories(data.results || []);
+        setCount(data.count || 0);
+        setLimit(data.limit || PAGE_LIMIT);
+      }
     } catch (err) {
       setError(errorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, search]);
 
   useEffect(() => {
     load();
@@ -88,11 +109,32 @@ export default function HomePage() {
     }
   }
 
-  // Поиск категорий в реальном времени (клиентская фильтрация)
-  const [query, setQuery] = useState('');
-  const filtered = query.trim()
-    ? categories.filter((c) => c.name.toLowerCase().includes(query.trim().toLowerCase()))
-    : categories;
+  // Поиск категорий в реальном времени: debounce 400 мс — запрос к API
+  // без нажатия кнопки; сбрасывает страницу на 1
+  const [query, setQuery] = useState(search);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const current = searchParams.get('search') || '';
+      const wanted = query.trim();
+      if (wanted !== current) {
+        const params = {};
+        if (wanted) params.search = wanted;
+        setSearchParams(params, { replace: true });
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [query]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function changePage(p) {
+    const params = {};
+    if (search) params.search = search;
+    params.page = String(p);
+    setSearchParams(params);
+    window.scrollTo({ top: 0 });
+  }
+
+  const pages = Math.max(1, Math.ceil((count || 0) / (limit || PAGE_LIMIT)));
 
   return (
     <div>
@@ -118,12 +160,13 @@ export default function HomePage() {
       {loading ? (
         <Spinner />
       ) : categories.length === 0 ? (
-        <div className="empty-state">Пока нет категорий</div>
-      ) : filtered.length === 0 ? (
-        <div className="empty-state">Ничего не найдено по запросу «{query}»</div>
+        <div className="empty-state">
+          {search ? `Ничего не найдено по запросу «${search}»` : 'Пока нет категорий'}
+        </div>
       ) : (
-        <div className="row g-3">
-          {filtered.map((cat) => (
+        <>
+          <div className="row g-3">
+            {categories.map((cat) => (
             <div key={cat.id} className="col-md-6 col-lg-4">
               <div className="card h-100 card-hover shadow-sm position-relative">
                 <div className="card-body d-flex flex-column">
@@ -137,6 +180,9 @@ export default function HomePage() {
                     </Link>
                   </div>
                   <div className="text-muted-small mt-2">Создана: {new Date(cat.created_at).toLocaleDateString('ru-RU')}</div>
+                  {typeof cat.topics_count === 'number' && (
+                    <div className="text-muted-small">{cat.topics_count} тем</div>
+                  )}
                   <div className="mt-auto pt-3">
                     {isAdmin ? (
                       <div className="d-flex gap-2">
@@ -166,7 +212,10 @@ export default function HomePage() {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+
+          <Pagination count={count} limit={limit} page={Math.min(page, pages)} onChange={changePage} />
+        </>
       )}
 
       {modalOpen && (

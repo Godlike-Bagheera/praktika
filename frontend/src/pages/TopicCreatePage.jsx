@@ -16,8 +16,10 @@ export default function TopicCreatePage() {
 
   useEffect(() => {
     api
-      .get('/categories')
-      .then((resp) => setCategories(resp.data))
+      .get('/categories', { params: { all: 1 } })
+      .then((resp) => {
+        setCategories(Array.isArray(resp.data) ? resp.data : resp.data.results);
+      })
       .catch((err) => setFormError(errorMessage(err)));
   }, []);
 

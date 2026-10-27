@@ -15,6 +15,9 @@ class ApiTests(TestCase):
         self.post = Post.objects.create(topic=self.topic, owner=self.u1, text="Ок текст")
 
     def login(self, u):
+        # rate-limit входа: 10 попыток в минуту на IP — чистим бакет перед логином
+        from django.core.cache import cache
+        cache.clear()
         r = self.c.post("/api/auth/login", data={"email": u.email, "password": "Zx9Kp7mQ2wLtr4!v"}, content_type="application/json")
         assert r.status_code == 200, r.content
         # JWT передаётся в httpOnly-куке; для тестового клиента подставляем заголовок
@@ -126,3 +129,109 @@ class ApiTests(TestCase):
         self.assertEqual(ws.max_row - 1, n_visible)
         self.assertEqual(ws.freeze_panes, "A2")
         self.assertIsNotNone(ws.auto_filter.ref)
+
+    def test_categories_pagination(self):
+        # логин до создания категорий: rate-limit входа — 10 попыток в минуту на IP
+        h = self.login(self.u1)
+        # без page/limit — обратная совместимость: плоский список
+        r0 = self.c.get("/api/categories", **h)
+        self.assertEqual(r0.status_code, 200)
+        self.assertIsInstance(r0.json(), list)
+        for i in range(6):
+            Category.objects.create(name=f"Категория {i}")
+        total = Category.objects.count()  # 7 (Общий + 6 новых)
+        r = self.c.get("/api/categories?page=1&limit=3", **h)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("results", data)
+        self.assertEqual(data["count"], total)
+        self.assertEqual(len(data["results"]), 3)
+        self.assertEqual(data["page"], 1)
+        self.assertEqual(data["pages"], (total + 2) // 3)
+        # topics_count в карточке категории
+        self.assertTrue(all("topics_count" in c for c in data["results"]))
+        # вторая страница отличается от первой
+        r2 = self.c.get("/api/categories?page=2&limit=3", **h)
+        ids1 = [c["id"] for c in data["results"]]
+        ids2 = [c["id"] for c in r2.json()["results"]]
+        self.assertFalse(set(ids1) & set(ids2))
+        # поиск по категориям + пагинация (6 созданных «Категория i»)
+        rs = self.c.get("/api/categories?limit=3&search=%D0%9A%D0%B0%D1%82%D0%B5%D0%B3%D0%BE%D1%80%D0%B8%D1%8F", **h)
+        ds = rs.json()
+        self.assertEqual(ds["count"], 6)
+        self.assertEqual(len(ds["results"]), 3)
+        # выход за последнюю страницу -> 404
+        r_bad = self.c.get("/api/categories?page=99&limit=3", **h)
+        self.assertEqual(r_bad.status_code, 404)
+
+    def test_topics_pagination_page(self):
+        # логин первым: rate-limit входа — 10 попыток в минуту на IP
+        h = self.login(self.u1)
+        for i in range(25):
+            Topic.objects.create(category=self.cat, owner=self.u1, title=f"Тема {i}")
+        r = self.c.get(f"/api/topics?category={self.cat.id}&page=1", **h)
+        data = r.json()
+        self.assertEqual(data["count"], 26)  # 25 новых + исходная
+        self.assertEqual(len(data["results"]), 20)
+        self.assertEqual(data["pages"], 2)
+        r2 = self.c.get(f"/api/topics?category={self.cat.id}&page=2", **h)
+        self.assertEqual(len(r2.json()["results"]), 6)
+
+    def test_search_multiword_posts(self):
+        # «хороший» поиск по сообщениям: все слова запроса должны
+        # встречаться в тексте (в любом регистре, частичное совпадение)
+        h = self.login(self.u1)
+        t2 = Topic.objects.create(category=self.cat, owner=self.u1, title="Вторая тема")
+        Post.objects.create(topic=t2, owner=self.u1, text="Привет Мир всем")
+        Post.objects.create(topic=t2, owner=self.u1, text="приветствие без второго слова")
+        # два слова — только первое сообщение
+        r = self.c.get(f"/api/topics/{t2.id}/posts?search=приве мир", **h)
+        results = r.json()["results"]
+        self.assertEqual(len(results), 1)
+        self.assertIn("Привет Мир", results[0]["text"])
+        # порядок слов не важен
+        r = self.c.get(f"/api/topics/{t2.id}/posts?search=мир%20ПРИВЕ", **h)
+        self.assertEqual(len(r.json()["results"]), 1)
+        # несуществующее слово — пусто
+        r = self.c.get(f"/api/topics/{t2.id}/posts?search=приве несуществует", **h)
+        self.assertEqual(r.json()["count"], 0)
+
+    def test_search_topics_by_title_or_posts(self):
+        # поиск тем ищет и в названии, и в текстах сообщений темы
+        h = self.login(self.u1)
+        t2 = Topic.objects.create(category=self.cat, owner=self.u1, title="Отчёт за квартал")
+        Post.objects.create(topic=t2, owner=self.u1, text="данные по выручке собраны")
+        # по названию
+        r = self.c.get(f"/api/topics?category={self.cat.id}&search=отчё", **h)
+        titles = [t["title"] for t in r.json()["results"]]
+        self.assertIn("Отчёт за квартал", titles)
+        # по тексту сообщения (в названии слова нет)
+        r = self.c.get(f"/api/topics?category={self.cat.id}&search=выручк", **h)
+        titles = [t["title"] for t in r.json()["results"]]
+        self.assertIn("Отчёт за квартал", titles)
+        # несколько слов: оба встречаются в ТЕКСТЕ одной темы — тема находится
+        Post.objects.create(topic=t2, owner=self.u1, text="собрали квартальные выгрузки")
+        r = self.c.get(f"/api/topics?category={self.cat.id}&search=кварт%20выручк", **h)
+        self.assertEqual(r.json()["count"], 1)
+        # слова из РАЗНЫХ тем не должны складываться
+        r = self.c.get(f"/api/topics?category={self.cat.id}&search=Тест%20выручк", **h)
+        self.assertEqual(r.json()["count"], 0)
+        # distinct: тема с двумя подходящими сообщениями возвращается один раз
+        Post.objects.create(topic=t2, owner=self.u1, text="ещё немного про выручку")
+        r = self.c.get(f"/api/topics?category={self.cat.id}&search=выручк", **h)
+        ids = [t["id"] for t in r.json()["results"]]
+        self.assertEqual(ids.count(t2.id), 1)
+
+    def test_categories_search_pagination_words(self):
+        h = self.login(self.u1)
+        Category.objects.create(name="Новости технологий")
+        Category.objects.create(name="Новости рынка")
+        Category.objects.create(name="Спорт")
+        r = self.c.get("/api/categories?page=1&limit=2&search=новости", **h)
+        data = r.json()
+        self.assertEqual(data["count"], 2)
+        self.assertEqual(len(data["results"]), 2)
+        # два слова — только «Новости технологий»/«Новости рынка» содержат оба
+        r = self.c.get("/api/categories?page=1&limit=5&search=%D0%BD%D0%BE%D0%B2%D0%BE%D1%81%D1%82%D0%B8%20%D1%82%D0%B5%D1%85", **h)
+        self.assertEqual(r.json()["count"], 1)
+

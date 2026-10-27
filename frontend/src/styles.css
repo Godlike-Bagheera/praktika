@@ -237,3 +237,13 @@ pre-wrap {
   color: #94a3b8;
   font-size: 0.85rem;
 }
+
+/* ---------- Search (live, без кнопки «Найти») ---------- */
+.search-input {
+  border-radius: 10px;
+}
+
+.search-input:focus {
+  border-color: var(--brand, #6366f1);
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.15);
+}

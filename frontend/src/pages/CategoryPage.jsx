@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../api';
 import Alert from '../components/Alert';
@@ -18,7 +18,13 @@ export default function CategoryPage() {
   const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchInput, setSearchInput] = useState(search);
+  // input — контролируемое поле поиска; searchParams обновляются с debounce
+  const [inputValue, setInputValue] = useState(search);
+
+  // синхронизируем поле, если ?search= изменился извне (ссылка/назад)
+  useEffect(() => {
+    setInputValue((prev) => ((prev.trim() === search) ? prev : search));
+  }, [search]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,11 +44,13 @@ export default function CategoryPage() {
   }, [id, search, page]);
 
   useEffect(() => {
-    // название категории — из общего списка
+    // название категории — из общего списка (без page/limit сервер
+    // отвечает плоским массивом всех категорий — обратная совместимость)
     api
       .get('/categories')
       .then((resp) => {
-        const cat = resp.data.find((c) => String(c.id) === String(id));
+        const list = Array.isArray(resp.data) ? resp.data : resp.data.results;
+        const cat = list.find((c) => String(c.id) === String(id));
         setCategory(cat || null);
       })
       .catch(() => {});
@@ -56,7 +64,7 @@ export default function CategoryPage() {
   useEffect(() => {
     const t = setTimeout(() => {
       const current = searchParams.get('search') || '';
-      const wanted = searchInput.trim();
+      const wanted = inputValue.trim();
       if (wanted !== current) {
         const params = {};
         if (wanted) params.search = wanted;
@@ -64,27 +72,14 @@ export default function CategoryPage() {
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [searchInput]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Мгновенная фильтрация уже загруженной страницы тем (до ответа API)
-  const visibleTopics = useMemo(() => {
-    const q = searchInput.trim().toLowerCase();
-    if (!q) return topics;
-    return topics.filter((t) => t.title.toLowerCase().includes(q));
-  }, [topics, searchInput]);
-
-  function applySearch(e) {
-    e.preventDefault();
-    const params = {};
-    if (searchInput.trim()) params.search = searchInput.trim();
-    setSearchParams(params);
-  }
+  }, [inputValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function changePage(p) {
     const params = {};
     if (search) params.search = search;
     params.page = String(p);
     setSearchParams(params);
+    window.scrollTo({ top: 0 });
   }
 
   return (
@@ -103,19 +98,14 @@ export default function CategoryPage() {
         </button>
       </div>
 
-      <form onSubmit={applySearch} className="row g-2 mb-3">
-        <div className="col-auto flex-grow-1">
-          <input
-            className="form-control"
-            placeholder="Поиск по названию темы..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-        </div>
-        <div className="col-auto">
-          <button className="btn btn-outline-secondary">Найти</button>
-        </div>
-      </form>
+      <input
+        type="search"
+        className="form-control mb-3 search-input"
+        placeholder="Поиск по названию темы..."
+        aria-label="Поиск тем"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+      />
 
       <Alert>{error}</Alert>
 
@@ -123,11 +113,11 @@ export default function CategoryPage() {
         <Spinner />
       ) : topics.length === 0 ? (
         <div className="empty-state">
-          {search ? 'Ничего не найдено по запросу' : 'В этой категории нет тем'}
+          {search ? `Ничего не найдено по запросу «${search}»` : 'В этой категории нет тем'}
         </div>
       ) : (
         <div className="list-group border-0">
-          {visibleTopics.map((t) => (
+          {topics.map((t) => (
             <Link
               key={t.id}
               to={`/topics/${t.id}`}
