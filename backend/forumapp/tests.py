@@ -54,6 +54,26 @@ class ApiTests(TestCase):
         r3 = self.c.post(f"/api/topics/{self.topic.id}/posts", data={"text":"нормальное сообщение"}, content_type="application/json", **h)
         self.assertEqual(r3.status_code, 201)
 
+    def test_profanity_dolbaeb_forms(self):
+        from forumapp.profanity import contains_profanity
+        # все формы и обфускации мат-корня «долбаеб» блокируются
+        for w in ["долбаеб", "долбоеб", "долбоёб", "долбаёб", "задолбоеб",
+                  "долбоебы", "долбаебов", "долбаёбом", "долбоебу",
+                  "дол@ба@еб", "д.о.л.б.а.е.б", "дол6а3аб",
+                  "долбящий", "долбля", "долбаный", "долбануть"]:
+            self.assertTrue(contains_profanity(w, strict=True), f"пропуск: {w}")
+        # транслит (в т.ч. верхний регистр и в составе предложения)
+        for w in ["dolboyob", "DOLBOYOB", "dolbyoby", "dolbaeb", "dolboeb",
+                  "some dolboyob here", "Ты долбоебы все"]:
+            self.assertTrue(contains_profanity(w, strict=True), f"пропуск: {w}")
+        # легальные слова не блокируются
+        for w in ["долбить", "долблю", "долбит", "долбят", "долбил",
+                  "наддолбите", "поддолбя", "обдолбятся", "задолбался",
+                  "долблёнка", "долбление", "долдон", "доллар", "долото",
+                  "долбоебыч", "dollywood", "doll", "dobby", "dolby",
+                  "nobody", "lobby", "dolphin", "goldberg", "balboa"]:
+            self.assertFalse(contains_profanity(w, strict=True), f"ложное срабатывание: {w}")
+
     def test_pagination_20(self):
         h = self.login(self.u1)
         for i in range(25):
