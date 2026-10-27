@@ -26,12 +26,20 @@ from .models import Category, Post, Topic
 from .pagination import ForumPagination
 from .permissions import IsAdmin, OwnerOrAdminDelete, OwnerOnlyEdit
 from .serializers import (
+    CategoryNameConflict,
     CategorySerializer,
     PostPatchSerializer,
     PostSerializer,
     TopicPatchSerializer,
     TopicSerializer,
 )
+
+
+def _category_conflict_response():
+    return Response(
+        {"errors": {"name": "Эта категория уже существует"}},
+        status=status.HTTP_409_CONFLICT,
+    )
 
 # ---------------------------------------------------------------------------
 # Rate limiting: no more than 10 login attempts per minute from one IP.
@@ -312,7 +320,11 @@ class CategoryListCreateView(APIView):
                     for f, v in serializer.errors.items()}
             return Response({"errors": errs},
                             status=status.HTTP_400_BAD_REQUEST)
-        serializer.save()
+        try:
+            serializer.save()
+        except CategoryNameConflict:
+            # гонка одновременного создания -> 409, а не 500
+            return _category_conflict_response()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
@@ -333,7 +345,11 @@ class CategoryDetailView(APIView):
                     for f, v in serializer.errors.items()}
             return Response({"errors": errs},
                             status=status.HTTP_400_BAD_REQUEST)
-        serializer.save()
+        try:
+            serializer.save()
+        except CategoryNameConflict:
+            # гонка одновременного переименования в одно имя -> 409, а не 500
+            return _category_conflict_response()
         return Response(serializer.data)
 
     def delete(self, request, pk):

@@ -1,6 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from forumapp.models import Category, Topic, Post
+from forumapp.serializers import CategorySerializer
 
 User = get_user_model()
 
@@ -321,3 +322,61 @@ class ApiTests(TestCase):
         for path in ("/api/upload", "/api/avatar", "/api/users/me/avatar"):
             r = self.c.post(path, data={}, content_type="multipart/form-data", **h)
             self.assertIn(r.status_code, (404, 405), path)
+
+    def test_category_race_returns_409_not_500(self):
+        """Гонка создания одноимённых категорий: проигравший получает 409.
+
+        Симулируем состояние «проверка iexact прошла, но параллельный запрос
+        уже вставил категорию»: unique-индекс name_lower даёт IntegrityError.
+        Раньше это превращалось в нечитаемый 500; теперь — 409 Conflict.
+        """
+        from unittest import mock
+        from django.db import IntegrityError
+        from forumapp.models import Category as _Cat
+
+        h = self.login(self.admin)
+        _Cat.objects.create(name="Гонка")
+
+        # Как при настоящей гонке: на момент validate_name конкурента «нет»,
+        # а INSERT падает по unique-индексу name_lower. Патчим сам метод
+        # валидации, не трогая другие запросы (счёт/рендер идут как обычно).
+        orig_validate = CategorySerializer.validate_name
+
+        def fake_validate(self_, value):
+            return orig_validate(self_, "Уникальное имя без конкурента №1")
+
+        conflict = IntegrityError(
+            'duplicate key value violates unique constraint '
+            '"forumapp_category_name_lower_key"'
+        )
+        with mock.patch.object(_Cat, "save", side_effect=conflict), \
+             mock.patch.object(CategorySerializer, "validate_name", fake_validate):
+            r = self.c.post("/api/categories", data={"name": "гонка"},
+                            content_type="application/json", **h)
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("name", r.json()["errors"])
+        self.assertEqual(_Cat.objects.filter(name__iexact="гонка").count(), 1)
+
+    def test_category_other_integrity_error_not_swallowed(self):
+        """IntegrityError НЕ про name_lower пробрасывается (не маскируется под 409/400)."""
+        from django.db import IntegrityError
+        from unittest import mock
+        from forumapp.serializers import CategoryNameConflict, CategorySerializer
+
+        with mock.patch(
+            "forumapp.serializers.transaction.atomic",
+            side_effect=IntegrityError("violates not-null constraint \"owner_id\""),
+        ):
+            s = CategorySerializer(data={"name": "Что-то"})
+            self.assertTrue(s.is_valid())
+            with self.assertRaises(IntegrityError):
+                s.save()
+        # а «наш» конфликт — отдельный класс исключения
+        with mock.patch(
+            "forumapp.serializers.transaction.atomic",
+            side_effect=IntegrityError('duplicate key value violates unique constraint "forumapp_category_name_lower_key"'),
+        ):
+            s = CategorySerializer(data={"name": "Чоуто"})
+            self.assertTrue(s.is_valid())
+            with self.assertRaises(CategoryNameConflict):
+                s.save()

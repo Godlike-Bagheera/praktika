@@ -5,6 +5,13 @@ from .models import Category, Post, Topic
 from .profanity import contains_profanity
 
 
+class CategoryNameConflict(Exception):
+    """Гонка при создании категории: name_lower уже занят другим запросом.
+
+    View должен превратить это в 409 Conflict (а не 400/500).
+    """
+
+
 def check_profanity(value: str) -> str:
     if contains_profanity(value, strict=True):
         raise serializers.ValidationError(
@@ -46,11 +53,11 @@ class CategorySerializer(serializers.ModelSerializer):
         except IntegrityError as exc:
             if "name_lower" not in str(exc):
                 raise
-            # Gunicorn с несколькими воркерами: уникальность в БД (name_lower) —
-            # последний рубеж (проверка iexact выше не атомарна).
-            raise serializers.ValidationError(
-                {"name": "Эта категория уже существует"}
-            )
+            # Гонка при создании (несколько запросов/воркеров одновременно):
+            # уникальный индекс name_lower — последний рубеж (проверка iexact
+            # выше не атомарна). Пробрасываем сигнал наружу, чтобы view вернул
+            # 409 Conflict, а не маскировал гонку под 400 ValidationError.
+            raise CategoryNameConflict() from exc
 
 
 class TopicSerializer(serializers.ModelSerializer):
