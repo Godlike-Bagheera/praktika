@@ -255,3 +255,69 @@ class ApiTests(TestCase):
         r = self.c.get("/api/categories?page=1&limit=5&search=%D0%BD%D0%BE%D0%B2%D0%BE%D1%81%D1%82%D0%B8%20%D1%82%D0%B5%D1%85", **h)
         self.assertEqual(r.json()["count"], 1)
 
+
+    # ---- Edge-case пагинации: page/limit из URL недоверенные ----
+    def test_pagination_edge_cases(self):
+        h = self.login(self.u1)
+        for i in range(3):
+            Topic.objects.create(category=self.cat, owner=self.u1, title=f"T{i}")
+        base = f"/api/topics?category={self.cat.id}"
+        # page=0 и page=-1 не должны давать 500 (EmptyPage)
+        r = self.c.get(base + "&page=0", **h)
+        self.assertIn(r.status_code, (200, 404), r.content)
+        r = self.c.get(base + "&page=-1", **h)
+        self.assertIn(r.status_code, (200, 404), r.content)
+        # заведомо несуществующая страница — не 500
+        r = self.c.get(base + "&page=999999", **h)
+        self.assertIn(r.status_code, (200, 404), r.content)
+        # мусор вместо числа — не 500
+        r = self.c.get(base + "&page=abc", **h)
+        self.assertIn(r.status_code, (200, 404), r.content)
+        # limit больше max_page_size(100) должен ограничиваться, а не пробрасываться
+        r = self.c.get(base + "&limit=100000", **h)
+        self.assertEqual(r.status_code, 200)
+        self.assertLessEqual(r.json()["limit"], 100)
+        # отрицательный/нулевой limit — не 500
+        r = self.c.get(base + "&limit=-5", **h)
+        self.assertIn(r.status_code, (200, 404), r.content)
+        # то же для категорий и сообщений
+        r = self.c.get("/api/categories?page=0&limit=3", **h)
+        self.assertIn(r.status_code, (200, 404), r.content)
+        r = self.c.get(f"/api/posts?topic={self.topic.id}&page=999999", **h)
+        self.assertIn(r.status_code, (200, 404), r.content)
+
+    # ---- Rate limiting ----
+    def test_login_rate_limit(self):
+        from django.core.cache import cache
+        cache.clear()
+        # лимит: 10 неуспешных попыток на IP в минуту
+        for _ in range(10):
+            self.c.post("/api/auth/login", data={"email": "u1@u.com", "password": "bad"}, content_type="application/json")
+        r = self.c.post("/api/auth/login", data={"email": "u1@u.com", "password": "Zx9Kp7mQ2wLtr4!v"}, content_type="application/json")
+        self.assertEqual(r.status_code, 429)
+
+    # ---- Поведение при протухшем/битом refresh-токене ----
+    def test_refresh_invalid_or_expired(self):
+        # без куки
+        r = self.c.post("/api/auth/refresh", content_type="application/json")
+        self.assertEqual(r.status_code, 401)
+        # битый токен
+        self.c.cookies["forum_refresh"] = "not.a.jwt"
+        r = self.c.post("/api/auth/refresh", content_type="application/json")
+        self.assertEqual(r.status_code, 401)
+        # кука должна быть очищена (пустое значение), а не содержать токен
+        self.assertEqual(self.c.cookies.get("forum_access").value if "forum_access" in self.c.cookies else "", "")
+        # корректный флоу: вход -> refresh выдаёт новый access
+        h = self.login(self.u1)
+        r = self.c.post("/api/auth/refresh", content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        new_token = self.c.cookies["forum_access"].value
+        r2 = self.c.get("/api/categories?page=1", HTTP_AUTHORIZATION="Bearer " + new_token)
+        self.assertEqual(r2.status_code, 200)
+
+    # ---- Загрузка файлов отсутствует по дизайну (аватар = gravatar-хэш из сессии) ----
+    def test_no_upload_endpoints(self):
+        h = self.login(self.u1)
+        for path in ("/api/upload", "/api/avatar", "/api/users/me/avatar"):
+            r = self.c.post(path, data={}, content_type="multipart/form-data", **h)
+            self.assertIn(r.status_code, (404, 405), path)
