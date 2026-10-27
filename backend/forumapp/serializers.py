@@ -43,7 +43,9 @@ class CategorySerializer(serializers.ModelSerializer):
         try:
             with transaction.atomic():
                 return super().save(**kwargs)
-        except IntegrityError:
+        except IntegrityError as exc:
+            if "name_lower" not in str(exc):
+                raise
             # Gunicorn с несколькими воркерами: уникальность в БД (name_lower) —
             # последний рубеж (проверка iexact выше не атомарна).
             raise serializers.ValidationError(
