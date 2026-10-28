@@ -380,3 +380,48 @@ class ApiTests(TestCase):
             self.assertTrue(s.is_valid())
             with self.assertRaises(CategoryNameConflict):
                 s.save()
+class SearchPaginationPageTest(TestCase):
+    """Регрессия: при комбинированном фильтре ?search=X&page=N номер страницы
+    должен сохраняться (не теряться и не сбрасываться на 1)."""
+
+    def setUp(self):
+        self.c = Client()
+        from django.core.cache import cache
+        cache.clear()
+        self.u1 = User.objects.create_user(email="sp@u.com", username="spuser",
+                                           password="Zx9Kp7mQ2wLtr4!v")
+        r = self.c.post("/api/auth/login",
+                        data={"email": "sp@u.com", "password": "Zx9Kp7mQ2wLtr4!v"},
+                        content_type="application/json")
+        assert r.status_code == 200, r.content
+        self.h = {"HTTP_AUTHORIZATION": "Bearer " + r.cookies["forum_access"].value}
+        self.cat = Category.objects.create(name="Тестовая")
+        # 25 тем с общим словом в названии -> 2 страницы по 20
+        for i in range(25):
+            Topic.objects.create(title=f"Флуд тема {i}", category=self.cat,
+                                 owner=self.u1)
+        t = Topic.objects.create(title="Отдельная", category=self.cat,
+                                 owner=self.u1)
+        for i in range(25):
+            Post.objects.create(topic=t, owner=self.u1,
+                                text=f"упоминание keyword-{i}")
+        self.topic_with_posts = t
+
+    def test_topics_search_keeps_page(self):
+        r = self.c.get(f"/api/topics?category={self.cat.id}&search=Флуд&page=2&limit=20", **self.h)
+        self.assertEqual(r.status_code, 200, r.content)
+        body = r.json()
+        self.assertEqual(body["page"], 2)
+        self.assertEqual(len(body["results"]), 5)
+
+    def test_posts_search_keeps_page(self):
+        r = self.c.get(f"/api/topics/{self.topic_with_posts.id}/posts?search=упоминание&page=2", **self.h)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["page"], 2)
+
+    def test_categories_search_keeps_page(self):
+        for i in range(13):
+            Category.objects.create(name=f"Категория {i}")
+        r = self.c.get("/api/categories?search=Категория&page=2&limit=12", **self.h)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["page"], 2)
