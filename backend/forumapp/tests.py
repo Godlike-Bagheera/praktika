@@ -181,9 +181,12 @@ class ApiTests(TestCase):
         ds = rs.json()
         self.assertEqual(ds["count"], 6)
         self.assertEqual(len(ds["results"]), 3)
-        # выход за последнюю страницу -> 404
+        # выход за последнюю страницу -> мягкий clamp на последнюю (200), не 404
         r_bad = self.c.get("/api/categories?page=99&limit=3", **h)
-        self.assertEqual(r_bad.status_code, 404)
+        self.assertEqual(r_bad.status_code, 200)
+        dbad = r_bad.json()
+        self.assertEqual(dbad["page"], dbad["pages"])
+        self.assertTrue(len(dbad["results"]) > 0)
 
     def test_topics_pagination_page(self):
         # логин первым: rate-limit входа — 10 попыток в минуту на IP
@@ -425,3 +428,90 @@ class SearchPaginationPageTest(TestCase):
         r = self.c.get("/api/categories?search=Категория&page=2&limit=12", **self.h)
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(r.json()["page"], 2)
+
+
+class StatsApiTest(TestCase):
+
+    def setUp(self):
+        self.c = Client()
+        self.admin = User.objects.create_user(
+            email="st-a@a.com", username="stadmin",
+            password="Zx9Kp7mQ2wLtr4!v", role="admin")
+        self.user = User.objects.create_user(
+            email="st-u@u.com", username="stuser",
+            password="Zx9Kp7mQ2wLtr4!v")
+        cat = Category.objects.create(name="Статистика")
+        self.topic = Topic.objects.create(
+            category=cat, owner=self.user, title="Топ тема")
+        Post.objects.create(topic=self.topic, owner=self.user, text="база")
+
+    def _login(self, u):
+        from django.core.cache import cache
+        cache.clear()
+        r = self.c.post("/api/auth/login",
+                        data={"email": u.email, "password": "Zx9Kp7mQ2wLtr4!v"},
+                        content_type="application/json")
+        assert r.status_code == 200, r.content
+        return {"HTTP_AUTHORIZATION": "Bearer " + r.cookies["forum_access"].value}
+
+    def test_stats_admin_only(self):
+        # обычный пользователь -> 403
+        h = self._login(self.user)
+        r = self.c.get("/api/stats", **h)
+        self.assertEqual(r.status_code, 403)
+
+    def test_stats_ok_for_admin(self):
+        h = self._login(self.admin)
+        Post.objects.create(topic=self.topic, owner=self.user, text="+1")
+        r = self.c.get("/api/stats", **h)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertIn("totals", data)
+        self.assertGreaterEqual(data["totals"]["posts"], 1)
+        titles = [t["title"] for t in data["top_topics"]]
+        self.assertIn(self.topic.title, titles)
+        # activity за 14 дней
+        self.assertEqual(len(data["activity"]), 14)
+        total_activity = sum(a["count"] for a in data["activity"])
+        self.assertGreaterEqual(total_activity, 1)
+
+
+class PaginationClampTest(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="cl-u@u.com", username="cluser",
+            password="Zx9Kp7mQ2wLtr4!v")
+        cat = Category.objects.create(name="Кламп")
+        for i in range(25):
+            Topic.objects.create(category=cat, owner=self.user,
+                                 title=f"Кламп тема {i}")
+
+    def setUp(self):
+        self.c = Client()
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(
+            email="cl-u@u.com", username="cluser",
+            password="Zx9Kp7mQ2wLtr4!v")
+        r = self.c.post("/api/auth/login",
+                        data={"email": "cl-u@u.com", "password": "Zx9Kp7mQ2wLtr4!v"},
+                        content_type="application/json")
+        assert r.status_code == 200, r.content
+        self.h = {"HTTP_AUTHORIZATION": "Bearer " + r.cookies["forum_access"].value}
+        cat = Category.objects.create(name="Кламп")
+        for i in range(25):
+            Topic.objects.create(category=cat, owner=self.user,
+                                 title=f"Кламп тема {i}")
+
+    def test_page_beyond_last_clamps_not_404(self):
+        """?page=999 должен вернуть последнюю страницу (200), а не 404."""
+        r = self.c.get("/api/topics?page=999", **self.h)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertEqual(data["page"], data["pages"])
+
+    def test_invalid_page_falls_back_to_first(self):
+        r = self.c.get("/api/topics?page=abc", **self.h)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["page"], 1)

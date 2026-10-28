@@ -1,24 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-
 /**
  * Красивая и удобная пагинация в стиле форума:
  *  - крупные круглые кнопки (первая/последняя, ‹ ›, соседние страницы);
  *  - активная страница подсвечена градиентом бренда;
- *  - «…» при длинных списках;
- *  - поле «перейти к странице» + счётчик «Страница X из Y».
+ *  - «…» при длинных списках.
  *
  * count — всего записей, limit — на страницу, page — текущая страница,
  * onChange(newPage) — колбэк смены страницы.
  */
 export default function Pagination({ count, limit, page, onChange }) {
   const pages = Math.max(1, Math.ceil((count || 0) / (limit || 20)));
-  const [jumpValue, setJumpValue] = useState('');
-  const inputRef = useRef(null);
-
-  // При смене страницы сбрасываем поле перехода
-  useEffect(() => {
-    setJumpValue('');
-  }, [page]);
 
   if (pages <= 1) return null;
 
@@ -36,13 +26,6 @@ export default function Pagination({ count, limit, page, onChange }) {
   const go = (p) => {
     const target = Math.min(Math.max(1, p), pages);
     if (target !== page) onChange(target);
-  };
-
-  const handleJump = (e) => {
-    e.preventDefault();
-    const n = parseInt(jumpValue, 10);
-    if (!Number.isNaN(n)) go(n);
-    if (inputRef.current) inputRef.current.blur();
   };
 
   const btnCls = (extra = '') => `forum-page-btn ${extra}`.trim();
@@ -134,28 +117,6 @@ export default function Pagination({ count, limit, page, onChange }) {
             </button>
           </li>
         </ul>
-
-        <div className="forum-pagination-jump">
-          <span className="forum-pagination-info">
-            Страница <b>{Math.min(page, pages)}</b> из <b>{pages}</b>
-          </span>
-          <form onSubmit={handleJump} className="d-flex gap-2 align-items-center">
-            <input
-              ref={inputRef}
-              type="number"
-              min={1}
-              max={pages}
-              className="form-control form-control-sm forum-jump-input"
-              placeholder={`№ 1–${pages}`}
-              value={jumpValue}
-              onChange={(e) => setJumpValue(e.target.value)}
-              aria-label="Номер страницы для перехода"
-            />
-            <button type="submit" className="btn btn-sm btn-outline-primary forum-jump-btn">
-              Перейти
-            </button>
-          </form>
-        </div>
       </div>
     </nav>
   );

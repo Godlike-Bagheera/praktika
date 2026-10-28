@@ -322,42 +322,64 @@ pre-wrap {
   user-select: none;
 }
 
-.forum-pagination-jump {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: center;
+/* ===== Меню профиля (шапка) ===== */
+.profile-menu { position: relative; }
+.profile-menu-toggle { cursor: pointer; border: 0; background: rgba(255,255,255,.08); }
+.profile-menu-toggle.is-open { background: rgba(255,255,255,.16); }
+.profile-caret { font-size: .7rem; opacity: .7; margin-left: 2px; transition: transform .15s ease; }
+.profile-menu-toggle.is-open .profile-caret { transform: rotate(180deg); }
+.profile-menu-dropdown {
+  position: absolute; right: 0; top: calc(100% + 10px); z-index: 1050;
+  min-width: 240px; padding: .5rem; border-radius: 14px;
+  background: #fff; color: #1f2430; box-shadow: 0 12px 32px rgba(16, 24, 40, .18);
+  animation: profileMenuIn .14s ease-out;
 }
+@keyframes profileMenuIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.profile-menu-caption { font-size: .75rem; color: #8a93a5; margin: .25rem .5rem .4rem; }
+.profile-menu-section {
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .06em;
+  color: #9aa3b2; margin: .55rem .5rem .25rem;
+}
+.profile-menu-item {
+  display: block; width: 100%; text-align: left; border: 0; background: transparent;
+  padding: .5rem .7rem; border-radius: 10px; font-size: .92rem; color: #1f2430;
+  text-decoration: none; cursor: pointer;
+}
+.profile-menu-item:hover { background: #f1f4f9; }
+.profile-menu-item.is-danger { color: #c0392b; }
+.profile-menu-item.is-danger:hover { background: #fdeceb; }
 
-.forum-pagination-info {
-  font-size: 0.88rem;
-  color: #64748b;
+/* ===== Страница статистики ===== */
+.forum-page-title { font-weight: 700; }
+.stats-tile {
+  background: #fff; border-radius: 16px; padding: 1rem 1.2rem;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, .06); text-align: center;
 }
+.stats-tile-value { font-size: 1.7rem; font-weight: 800; color: #4f46e5; line-height: 1.2; }
+.stats-tile-label { font-size: .85rem; color: #6b7280; }
+.stats-card {
+  background: #fff; border-radius: 16px; padding: 1.2rem 1.4rem; height: 100%;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, .06);
+}
+.stats-card-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 0; }
+.stats-card-sub { font-size: .8rem; color: #8a93a5; margin-bottom: 1rem; }
 
-.forum-pagination-info b {
-  color: var(--brand-dark);
-}
+.stats-bars { display: flex; flex-direction: column; gap: .55rem; }
+.stats-bar-row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr auto; align-items: center; gap: .7rem; }
+.stats-bar-label { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats-bar-label a { color: #1f2430; text-decoration: none; }
+.stats-bar-label a:hover { color: #4f46e5; text-decoration: underline; }
+.stats-bar-track { background: #eef1f6; border-radius: 999px; height: 14px; overflow: hidden; }
+.stats-bar-fill { height: 100%; border-radius: 999px; min-width: 4px; transition: width .4s ease; }
+.stats-bar-fill.is-brand { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+.stats-bar-fill.is-accent { background: linear-gradient(90deg, #f59e0b, #f97316); }
+.stats-bar-fill.is-soft { background: linear-gradient(90deg, #34d399, #10b981); }
+.stats-bar-value { font-size: .8rem; color: #6b7280; white-space: nowrap; min-width: 84px; text-align: right; }
 
-.forum-jump-input {
-  width: 92px;
-  border-radius: 999px;
-  text-align: center;
+.stats-activity { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding-top: .5rem; }
+.stats-activity-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+.stats-activity-bar {
+  width: 100%; max-width: 26px; border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(180deg, #8b5cf6, #6366f1); transition: height .4s ease;
 }
-
-/* скрыть стрелки у number-инпута */
-.forum-jump-input::-webkit-outer-spin-button,
-.forum-jump-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.forum-jump-input {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.forum-jump-btn {
-  border-radius: 999px;
-  padding: 4px 16px;
-  font-weight: 600;
-}
+.stats-activity-day { font-size: .65rem; color: #9aa3b2; margin-top: 4px; }

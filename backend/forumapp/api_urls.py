@@ -29,4 +29,6 @@ urlpatterns = [
     # Без слэша: фронт обращается к /api/posts/export (nginx проксирует как есть)
     path("posts/export", views.PostsExportView.as_view(),
          name="posts-export"),
+    # Stats (admin only)
+    path("stats", views.ForumStatsView.as_view(), name="forum-stats"),
 ]

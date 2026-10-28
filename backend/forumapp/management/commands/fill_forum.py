@@ -347,10 +347,10 @@ class Command(BaseCommand):
         parser.add_argument("--user-password", default="Demo12345")
         parser.add_argument("--seed", type=int, default=42)
         parser.add_argument(
-            "--topics-per-category", type=int, default=0,
+            "--topics-per-category", type=int, default=15,
             help="Дописать в каждую категорию столько дополнительных тем "
                  "(с сообщениями), чтобы пагинация тем была заметной; "
-                 "0 — не добавлять",
+                 "0 — не добавлять (по умолчанию 15)",
         )
         parser.add_argument(
             "--backfill", action="store_true",

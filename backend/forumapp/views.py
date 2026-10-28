@@ -4,6 +4,7 @@ import os
 import re
 
 from django.db.models import CharField, Count, Exists, Lookup, OuterRef, Q, TextField
+from django.db.models.functions import TruncDate
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponse
 from rest_framework import status
@@ -702,3 +703,73 @@ class PostsExportView(APIView):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         wb.save(response)
         return response
+
+
+# ---------------------------------------------------------------------------
+# Статистика форума (только для администратора) — диаграммы на странице
+# «Статистика» в выпадающем меню профиля.
+# ---------------------------------------------------------------------------
+class ForumStatsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        days = min(max(int(request.query_params.get("days", 14) or 14), 1), 90)
+
+        topics_total = Topic.objects.count()
+        posts_total = Post.objects.count()
+        users_total = request.user.__class__.objects.count()
+
+        top_topics = (
+            Topic.objects.annotate(posts_count=Count("posts"))
+            .order_by("-posts_count", "-created_at")[:10]
+            .values("id", "title", "posts_count")
+        )
+
+        top_authors = (
+            Post.objects.select_related("owner")
+            .annotate(posts_count=Count("id"))
+            .order_by("-posts_count")[:10]
+            .values("owner__username", "posts_count")
+        )
+
+        categories = (
+            Category.objects.annotate(
+                topics_count=Count("topics", distinct=True),
+                posts_count=Count("topics__posts", distinct=True),
+            )
+            .order_by("-topics_count")
+            .values("id", "name", "topics_count", "posts_count")
+        )
+
+        since = datetime.datetime.now(
+            datetime.timezone.utc
+        ) - datetime.timedelta(days=days)
+        activity_raw = (
+            Post.objects.filter(created_at__gte=since)
+            .annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(count=Count("id"))
+            .order_by("day")
+        )
+        counts = {str(a["day"]): a["count"] for a in activity_raw if a["day"]}
+        activity = []
+        today = datetime.date.today()
+        for i in range(days - 1, -1, -1):
+            d = (today - datetime.timedelta(days=i)).isoformat()
+            activity.append({"date": d, "count": counts.get(d, 0)})
+
+        return Response({
+            "totals": {
+                "topics": topics_total,
+                "posts": posts_total,
+                "users": users_total,
+                "categories": Category.objects.count(),
+            },
+            "top_topics": list(top_topics),
+            "top_authors": [
+                {"username": a["owner__username"], "count": a["posts_count"]}
+                for a in top_authors
+            ],
+            "categories": list(categories),
+            "activity": activity,
+        })

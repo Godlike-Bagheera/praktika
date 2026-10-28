@@ -1,9 +1,36 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 
 export default function Header() {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  // Закрытие меню по клику вне него и по Escape
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  const doLogout = () => {
+    setMenuOpen(false);
+    logout().then(() => navigate('/login'));
+  };
 
   return (
     <header className="navbar navbar-expand-lg forum-header" data-bs-theme="dark">
@@ -14,19 +41,50 @@ export default function Header() {
         </Link>
         <div className="ms-auto d-flex align-items-center gap-2">
           {user && (
-            <>
-              <span className="user-chip text-light">
+            <div className="profile-menu" ref={menuRef}>
+              <button
+                type="button"
+                className={`user-chip text-light profile-menu-toggle ${menuOpen ? 'is-open' : ''}`}
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-haspopup="true"
+                aria-expanded={menuOpen}
+              >
                 <span className="avatar-circle">{user.username.charAt(0).toUpperCase()}</span>
                 {user.username}
                 {isAdmin && <span className="badge badge-admin">Администратор</span>}
-              </span>
-              <button
-                className="btn btn-outline-light btn-sm"
-                onClick={() => logout().then(() => navigate('/login'))}
-              >
-                Выйти
+                <span className="profile-caret">▾</span>
               </button>
-            </>
+
+              {menuOpen && (
+                <div className="profile-menu-dropdown">
+                  <p className="profile-menu-caption">Действия аккаунта</p>
+                  {isAdmin && (
+                    <>
+                      <p className="profile-menu-section">Только для администратора</p>
+                      <Link
+                        className="profile-menu-item"
+                        to="/stats"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        📊 Статистика
+                      </Link>
+                      <a
+                        className="profile-menu-item"
+                        href="/admin/"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        ⚙️ Панель администратора
+                      </a>
+                    </>
+                  )}
+                  <p className="profile-menu-section">Аккаунт</p>
+                  <button type="button" className="profile-menu-item is-danger" onClick={doLogout}>
+                    Выйти
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

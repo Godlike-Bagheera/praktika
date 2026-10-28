@@ -11,6 +11,7 @@ import TopicCreatePage from './pages/TopicCreatePage';
 import TopicEditPage from './pages/TopicEditPage';
 import TopicPage from './pages/TopicPage';
 import PostEditPage from './pages/PostEditPage';
+import StatsPage from './pages/StatsPage';
 
 function Booting() {
   return (
@@ -43,6 +44,13 @@ function PublicOnlyRoute({ children }) {
   return children;
 }
 
+function AdminRoute() {
+  const { isAdmin, booting } = useAuth();
+  if (booting) return <Booting />;
+  if (!isAdmin) return <Navigate to="/" replace />;
+  return <Outlet />;
+}
+
 function AppRoutes() {
   // Токены теперь в httpOnly-куках — JS их не читает; статус сессии
   // определяет AuthProvider через запрос /auth/me (состояние booting).
@@ -66,6 +74,9 @@ function AppRoutes() {
       />
       <Route element={<PrivateRoute />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/stats" element={<AdminRoute />}>
+          <Route index element={<StatsPage />} />
+        </Route>
         <Route path="/categories/:id" element={<CategoryPage />} />
         <Route path="/topics/new" element={<TopicCreatePage />} />
         <Route path="/topics/:id" element={<TopicPage />} />
