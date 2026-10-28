@@ -266,29 +266,43 @@ class ApiTests(TestCase):
         for i in range(3):
             Topic.objects.create(category=self.cat, owner=self.u1, title=f"T{i}")
         base = f"/api/topics?category={self.cat.id}"
-        # page=0 и page=-1 не должны давать 500 (EmptyPage)
+        # page=0 и page=-1 -> мягкий clamp на первую страницу (200)
         r = self.c.get(base + "&page=0", **h)
-        self.assertIn(r.status_code, (200, 404), r.content)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["page"], 1)
         r = self.c.get(base + "&page=-1", **h)
-        self.assertIn(r.status_code, (200, 404), r.content)
-        # заведомо несуществующая страница — не 500
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["page"], 1)
+        # заведомо несуществующая страница -> последняя (200), не 404/500
         r = self.c.get(base + "&page=999999", **h)
-        self.assertIn(r.status_code, (200, 404), r.content)
-        # мусор вместо числа — не 500
+        self.assertEqual(r.status_code, 200, r.content)
+        data = r.json()
+        self.assertEqual(data["page"], data["pages"])
+        # мусор вместо числа — первая страница (200)
         r = self.c.get(base + "&page=abc", **h)
-        self.assertIn(r.status_code, (200, 404), r.content)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["page"], 1)
         # limit больше max_page_size(100) должен ограничиваться, а не пробрасываться
         r = self.c.get(base + "&limit=100000", **h)
         self.assertEqual(r.status_code, 200)
         self.assertLessEqual(r.json()["limit"], 100)
-        # отрицательный/нулевой limit — не 500
+        # отрицательный/нулевой limit — не 500 (fallback на page_size=20)
         r = self.c.get(base + "&limit=-5", **h)
-        self.assertIn(r.status_code, (200, 404), r.content)
-        # то же для категорий и сообщений
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertLessEqual(r.json()["limit"], 100)
+        # то же для категорий и сообщений: мягкий clamp, не 404/500
         r = self.c.get("/api/categories?page=0&limit=3", **h)
-        self.assertIn(r.status_code, (200, 404), r.content)
-        r = self.c.get(f"/api/posts?topic={self.topic.id}&page=999999", **h)
-        self.assertIn(r.status_code, (200, 404), r.content)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["page"], 1)
+        # Сообщения пагинируются на /api/topics/<id>/posts (такого list-эндпоинта
+        # как /api/posts?topic= не существует — был бы 404).
+        r = self.c.get(f"/api/topics/{self.topic.id}/posts?page=999999", **h)
+        self.assertEqual(r.status_code, 200, r.content)
+        pdata = r.json()
+        self.assertEqual(pdata["page"], pdata["pages"])
+        r = self.c.get(f"/api/topics/{self.topic.id}/posts?page=abc", **h)
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()["page"], 1)
 
     # ---- Rate limiting ----
     def test_login_rate_limit(self):
