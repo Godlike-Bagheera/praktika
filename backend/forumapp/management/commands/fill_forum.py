@@ -61,6 +61,7 @@ CATEGORY_TITLES = [
     "Виртуализация и Docker",
     "API и микросервисы",
     "Frontend фреймворки",
+    "Смежные темы",
 ]
 CATEGORIES = list(CATEGORY_TITLES)
 
@@ -280,6 +281,16 @@ TOPICS_BY_CATEGORY = {
         "Angular vs React: честное сравнение",
         "Solid.js: быстрый и недооценённый",
     ],
+    "Смежные темы": [
+        "О чём вообще можно говорить на форуме?",
+        "Любимые цитаты из фильмов и игр",
+        "Музыка для работы: плейлисты участников",
+        "Фильмы, которые пересматривали больше трёх раз",
+        "Какие подкасты слушаете?",
+        "Странности IT: байки с production",
+        "Что читаете кроме технической литературы?",
+        "История одного бага: самые длинные дебаги",
+    ],
 }
 
 POST_TEXTS = [
@@ -335,6 +346,12 @@ class Command(BaseCommand):
         parser.add_argument("--users", type=int, default=60)
         parser.add_argument("--user-password", default="Demo12345")
         parser.add_argument("--seed", type=int, default=42)
+        parser.add_argument(
+            "--topics-per-category", type=int, default=0,
+            help="Дописать в каждую категорию столько дополнительных тем "
+                 "(с сообщениями), чтобы пагинация тем была заметной; "
+                 "0 — не добавлять",
+        )
         parser.add_argument(
             "--backfill", action="store_true",
             help="Дописать стартовые посты и ответы во ВСЕ существующие темы "
@@ -445,6 +462,34 @@ class Command(BaseCommand):
             empty_topics = Topic.objects.filter(posts__isnull=True).select_related("category")
             for topic in empty_topics:
                 populate(topic, topic.category.name)
+
+        # --- Дополнительные темы для наглядной пагинации ---
+        extra_topics = options["topics_per_category"]
+        if extra_topics > 0:
+            added = 0
+            for cat_name, cat in cats.items():
+                base = TOPICS_BY_CATEGORY.get(cat_name, [])
+                i = 0
+                made = 0
+                attempts = 0
+                while made < extra_topics and attempts < extra_topics * 5:
+                    attempts += 1
+                    i += 1
+                    title = f"{cat_name}: обсуждение #{i}"
+                    if title in base:
+                        continue
+                    exists = Topic.objects.filter(category=cat, title__iexact=title).exists()
+                    if exists:
+                        continue
+                    owner = rng.choice(users)
+                    topic = Topic.objects.create(category=cat, owner=owner, title=title)
+                    populate(topic, cat_name)
+                    made += 1
+                    added += 1
+                    new_topics += 1
+            self.stdout.write(self.style.SUCCESS(
+                f"Дополнительных тем для пагинации создано: {added}"
+            ))
 
         self.stdout.write(self.style.SUCCESS(
             f"Новых тем создано: {new_topics}, новых сообщений: {new_posts}"

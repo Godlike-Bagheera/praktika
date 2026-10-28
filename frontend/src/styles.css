@@ -247,3 +247,117 @@ pre-wrap {
   border-color: var(--brand, #6366f1);
   box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.15);
 }
+
+/* ---------- Pagination (forum style) ---------- */
+.forum-pagination-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.forum-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.forum-page-btn {
+  min-width: 42px;
+  height: 42px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.98rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.15s ease, transform 0.15s ease,
+    border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  box-shadow: 0 1px 3px rgba(30, 41, 59, 0.06);
+}
+
+.forum-page-btn:hover:not(:disabled):not(.is-active) {
+  border-color: #c7d2fe;
+  color: var(--brand-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.18);
+}
+
+.forum-page-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+}
+
+.forum-page-btn.is-active {
+  background: linear-gradient(135deg, var(--brand), #7c3aed);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
+  cursor: default;
+}
+
+.forum-page-btn:disabled,
+.forum-page-btn.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.forum-page-dots {
+  min-width: 26px;
+  text-align: center;
+  color: #94a3b8;
+  font-weight: 700;
+  user-select: none;
+}
+
+.forum-pagination-jump {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.forum-pagination-info {
+  font-size: 0.88rem;
+  color: #64748b;
+}
+
+.forum-pagination-info b {
+  color: var(--brand-dark);
+}
+
+.forum-jump-input {
+  width: 92px;
+  border-radius: 999px;
+  text-align: center;
+}
+
+/* скрыть стрелки у number-инпута */
+.forum-jump-input::-webkit-outer-spin-button,
+.forum-jump-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.forum-jump-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.forum-jump-btn {
+  border-radius: 999px;
+  padding: 4px 16px;
+  font-weight: 600;
+}
