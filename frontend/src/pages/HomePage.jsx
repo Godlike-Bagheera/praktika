@@ -188,19 +188,19 @@ export default function HomePage() {
                       <div className="topic-actions d-flex gap-1">
                         <button
                           type="button"
-                          className="btn btn-sm btn-action btn-action-edit"
+                          className="btn btn-sm btn-action-edit"
                           onClick={() => openEdit(cat)}
                           title="Редактировать категорию"
                         >
-                          <span className="btn-icon">✏️</span>
+                          Редактировать
                         </button>
                         <button
                           type="button"
-                          className="btn btn-sm btn-action btn-action-delete"
+                          className="btn btn-sm btn-action-delete"
                           onClick={() => remove(cat)}
                           title="Удалить категорию"
                         >
-                          <span className="btn-icon">🗑</span>
+                          Удалить
                         </button>
                       </div>
                     ) : (

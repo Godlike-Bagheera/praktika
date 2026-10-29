@@ -69,7 +69,7 @@ export default function ReportButton({ postId, isOwnPost }) {
     <div className="report-widget position-relative d-inline-flex flex-column align-items-start" ref={wrapRef}>
       <button
         type="button"
-        className={`btn btn-sm btn-action btn-action-report ${done ? 'disabled' : ''}`}
+        className={`btn btn-sm btn-action-report ${done ? 'disabled' : ''}`}
         onClick={() => {
           setNotice('');
           setOpen((v) => !v);
@@ -79,32 +79,31 @@ export default function ReportButton({ postId, isOwnPost }) {
         aria-expanded={open}
         title={done ? 'Жалоба уже отправлена' : 'Пожаловаться на сообщение'}
       >
-        <span className="btn-icon">🚩</span>
+        Пожаловаться
       </button>
 
       {open && (
-        <div className="report-menu card shadow-sm">
-          <div className="card-body p-2">
-            <div className="report-menu-title">Пожаловаться на сообщение</div>
-            {REASONS.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                className="btn btn-sm btn-outline-primary w-100 text-start mb-1"
-                disabled={sending}
-                onClick={() => submitReason(r.value)}
-              >
-                {r.label}
-              </button>
-            ))}
+        <div className="report-dropdown" role="menu">
+          <div className="report-dropdown-header">Пожаловаться на сообщение</div>
+          {REASONS.map((r) => (
             <button
+              key={r.value}
               type="button"
-              className="btn btn-sm btn-secondary w-100"
-              onClick={() => setOpen(false)}
+              className="report-dropdown-item"
+              disabled={sending}
+              onClick={() => submitReason(r.value)}
             >
-              Отмена
+              {r.label}
             </button>
-          </div>
+          ))}
+          <div className="report-dropdown-divider"></div>
+          <button
+            type="button"
+            className="report-dropdown-item report-dropdown-cancel"
+            onClick={() => setOpen(false)}
+          >
+            Отмена
+          </button>
         </div>
       )}
 
