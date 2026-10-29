@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 import { AuthProvider, useAuth } from './AuthContext';
+import ReportToastWrapper from './components/ReportToastWrapper';
 import { NotificationsProvider } from './NotificationsContext';
 import Header from './components/Header';
 import RegisterPage from './pages/RegisterPage';
@@ -114,6 +115,7 @@ export default function App() {
       <AuthProvider>
         <NotificationsProvider>
           <AppRoutes />
+          <ReportToastWrapper />
         </NotificationsProvider>
       </AuthProvider>
     </BrowserRouter>

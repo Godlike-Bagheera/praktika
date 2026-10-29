@@ -4,7 +4,6 @@ import { useAuth } from '../AuthContext';
 import { useNotifications } from '../NotificationsContext';
 import { api } from '../api';
 import ThemeToggle from './ThemeToggle';
-import ReportNotificationsDropdown from './ReportNotificationsDropdown';
 
 export default function Header() {
   const { user, isAdmin, logout } = useAuth();
@@ -14,7 +13,6 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const [pendingReports, setPendingReports] = useState(0);
-  const [reportNotifCount, setReportNotifCount] = useState(0);
 
   // Счётчик жалоб «на рассмотрении» для админа: при монтировании + каждые 30 сек.
   useEffect(() => {
@@ -40,30 +38,6 @@ export default function Header() {
       cancelled = true;
       clearInterval(timer);
       window.removeEventListener('forum-reports-refresh', onRefresh);
-    };
-  }, [isAdmin]);
-
-  // Счётчик непрочитанных уведомлений о жалобах (отдельная система ReportNotification):
-  // загрузка при монтировании + опрос каждые 30 сек, интервал очищается при unmount.
-  useEffect(() => {
-    if (!isAdmin) {
-      setReportNotifCount(0);
-      return undefined;
-    }
-    let cancelled = false;
-    const loadNotifCount = async () => {
-      try {
-        const response = await api.get('/admin-report-notifications/unread-count/');
-        if (!cancelled) setReportNotifCount(response.data.count || 0);
-      } catch (err) {
-        console.error('Failed to load report notification count', err);
-      }
-    };
-    loadNotifCount();
-    const interval = setInterval(loadNotifCount, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
     };
   }, [isAdmin]);
 
@@ -127,17 +101,6 @@ export default function Header() {
                       <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
                     )}
                   </Link>
-                  {isAdmin && (
-                    <div className="report-notif-row d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
-                      <span style={{ fontSize: '13px', color: 'var(--bs-body-color)' }}>
-                        Уведомления о жалобах
-                      </span>
-                      <ReportNotificationsDropdown
-                        count={reportNotifCount}
-                        onMarkRead={() => setReportNotifCount(0)}
-                      />
-                    </div>
-                  )}
                   {isAdmin && (
                     <Link
                       className="profile-menu-item"
