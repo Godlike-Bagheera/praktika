@@ -141,6 +141,18 @@ body {
   color: #fff;
   font-weight: 700;
   flex-shrink: 0;
+  /* Явно по центру карточки поста. Класс align-self-center из Bootstrap
+     может отсутствовать в подключенной сборке — поэтому дублируем здесь. */
+  align-self: center;
+}
+
+/* Ряд «текст сообщения + кнопки Изменить/Удалить»: всё по вертикали
+   по центру относительно друг друга (align-self у кнопок не нужен —
+   родитель уже центрирует). */
+.post-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .edited-badge {

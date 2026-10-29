@@ -243,10 +243,10 @@ export default function TopicPage() {
             <div className="mb-3">
               {posts.map((p) => (
                 <div key={p.id} className="card post-card shadow-sm mb-2">
-                  <div className="card-body py-2 d-flex gap-3">
-                    <span className="post-avatar align-self-center">{p.owner.username.charAt(0).toUpperCase()}</span>
+                  <div className="card-body py-2 d-flex gap-3 align-items-center">
+                    <span className="post-avatar">{p.owner.username.charAt(0).toUpperCase()}</span>
                     <div className="flex-grow-1">
-                      <div className="d-flex justify-content-between align-items-center">
+                      <div className="post-row">
                         <div
                           className="flex-grow-1"
                           style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
