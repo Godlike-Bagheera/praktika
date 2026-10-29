@@ -184,7 +184,7 @@ body {
 .topic-actions .btn {
   height: 30px !important;
   min-height: 30px !important;
-  display: inline-flex !important;
+  display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   line-height: 1 !important;
@@ -192,6 +192,17 @@ body {
   padding-bottom: 0 !important;
   font-size: 0.8rem;
   white-space: nowrap;
+}
+
+/* Bootstrap задаёт .btn::before/::after с content:"" — как flex-элементы они
+   уводили текст вниз (замер в Chromium: зазор сверху 6.6px против 8.4 снизу).
+   Отключаем их для компактных кнопок действий. */
+.post-actions .btn::before,
+.post-actions .btn::after,
+.topic-actions .btn::before,
+.topic-actions .btn::after {
+  display: none !important;
+  content: none !important;
 }
 
 .form-control:focus,
