@@ -1,11 +1,14 @@
 """
 Django settings for the Forum project.
 """
+import logging
 import os
 from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+logger = logging.getLogger(__name__)
 
 # Load .env if python-dotenv is available (local development convenience)
 try:
@@ -25,12 +28,43 @@ def env_bool(name, default=False):
 # --------------------------------------------------------------------------
 # Core settings
 # --------------------------------------------------------------------------
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-change-me-in-production-0123456789abcdef",
-)
-
 DEBUG = env_bool("DJANGO_DEBUG", False)
+
+# SECRET_KEY: в production (DEBUG=False) без DJANGO_SECRET_KEY сервер НЕ
+# запускается — хардкод-фоллбэк недопустим. В DEBUG mode dev-ключ остаётся,
+# но с явным предупреждением в логе.
+DEV_FALLBACK_SECRET_KEY = "django-insecure-dev-only-0123456789abcdef"
+
+
+def get_secret_key(debug=None, env=None):
+    """Возвращает SECRET_KEY из окружения.
+
+    При DEBUG=False и пустом DJANGO_SECRET_KEY бросает ValueError (сервер
+    не должен подниматься на хардкод-ключе). При DEBUG=True возвращает
+    dev-фоллбэк и текст предупреждения (второй элемент кортежа), которое
+    settings выводят в лог при старте.
+    """
+    if debug is None:
+        debug = DEBUG
+    if env is None:
+        env = os.environ
+    secret = env.get("DJANGO_SECRET_KEY")
+    if secret:
+        return secret, None
+    if debug:
+        return DEV_FALLBACK_SECRET_KEY, (
+            "Используется DEV SECRET_KEY (DJANGO_SECRET_KEY не задан). "
+            "НИКОГДА не запускайте так production: задайте DJANGO_SECRET_KEY."
+        )
+    raise ValueError(
+        "DJANGO_SECRET_KEY не задан при DEBUG=False. Задайте надёжный "
+        "секретный ключ в окружении или файле .env, например: "
+        "DJANGO_SECRET_KEY=$(python -c \"from django.core.management.utils "
+        "import get_random_secret_key; print(get_random_secret_key())\")"
+    )
+
+
+SECRET_KEY, _dev_key_warning = get_secret_key()
 
 ALLOWED_HOSTS = [
     h.strip()
@@ -173,9 +207,9 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
-    "ROTATE_REFRESH_TOKENS": False,
+    "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
@@ -227,3 +261,8 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
 }
+
+# Предупреждения о небезопасной конфигурации — после настройки логгера,
+# чтобы администратор заметил их в логе при старте Django.
+if _dev_key_warning:
+    logger.warning(_dev_key_warning)

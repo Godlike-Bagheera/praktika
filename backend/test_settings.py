@@ -1,5 +1,14 @@
 # Test settings: PostgreSQL only (as in production). SQLite is NOT used.
+import os
+
+# Тестовый SECRET_KEY должен попасть в окружение ДО импорта forum.settings:
+# при DEBUG=False без DJANGO_SECRET_KEY настройки падают с ValueError
+# (фикс безопасности) — здесь эмулируется корректно настроенный production.
+os.environ.setdefault("DJANGO_SECRET_KEY", "test-secret-key-only-not-for-production")
+
 from forum.settings import *  # noqa
+
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]  # noqa
 
 DATABASES = {
     "default": {

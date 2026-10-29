@@ -1,8 +1,10 @@
 """Views for the Forum API."""
 import datetime
+import logging
 import os
 import re
 
+from django.conf import settings
 from django.db.models import (
     CharField, Count, Exists, IntegerField, Lookup, OuterRef, Q, TextField, Value,
 )
@@ -37,6 +39,35 @@ from .serializers import (
     TopicPatchSerializer,
     TopicSerializer,
 )
+
+logger = logging.getLogger(__name__)
+
+# Пути куки для refresh-токена: сужаем область (фикс 4) — logout и refresh
+# живут под /api/auth/*, поэтому кука отдаётся только туда.
+REFRESH_COOKIE_PATH = "/api/auth/"
+
+
+def _jwt_conf():
+    """ACCESS/REFRESH lifetime из настроек SIMPLE_JWT (единственный источник
+    правды — синхронно с реальным временем жизни токенов)."""
+    conf = getattr(settings, "SIMPLE_JWT", {})
+    access = conf.get("ACCESS_TOKEN_LIFETIME", datetime.timedelta(minutes=15))
+    refresh = conf.get("REFRESH_TOKEN_LIFETIME", datetime.timedelta(days=7))
+    return access, refresh
+
+
+def _cookie_secure():
+    """Secure-флаг куки. По умолчанию ВКЛЮЧЕН (безопасный дефолт);
+    отключается только явным DJANGO_SECURE_COOKIES=0 (например, локальная
+    http-разработка). При DEBUG=False и secure=False — предупреждение в лог."""
+    secure = os.environ.get("DJANGO_SECURE_COOKIES", "1") == "1"
+    if not secure and not settings.DEBUG:
+        logger.warning(
+            "DJANGO_SECURE_COOKIES=0 при DEBUG=False: куки авторизации "
+            "передаются без флага Secure (только по HTTPS это безопасно!). "
+            "Включите DJANGO_SECURE_COOKIES=1 в production."
+        )
+    return secure
 
 
 def _category_conflict_response():
@@ -164,27 +195,27 @@ class LoginView(APIView):
             return Response({"errors": errs},
                             status=status.HTTP_400_BAD_REQUEST)
 
-        from datetime import timedelta
-
         from rest_framework_simplejwt.tokens import RefreshToken
         user = serializer.validated_data["user"]
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
 
+        access_life, refresh_life = _jwt_conf()
         response = Response({"user": MeSerializer(user).data})
-        secure = os.environ.get("DJANGO_SECURE_COOKIES", "0") == "1"
-        # access — httpOnly кука на весь сайт; JS её не видит (защита от XSS)
+        secure = _cookie_secure()
+        # access — httpOnly кука на весь сайт; JS её не видит (защита от XSS);
+        # max_age синхронизирован с SIMPLE_JWT.ACCESS_TOKEN_LIFETIME (15 мин)
         response.set_cookie(
             "forum_access", access,
-            max_age=int(timedelta(hours=24).total_seconds()),
+            max_age=int(access_life.total_seconds()),
             httponly=True, samesite="Lax", secure=secure, path="/",
         )
-        # refresh — только для эндпоинта logout
+        # refresh — только для эндпоинтов /api/auth/* (path сужен, фикс 4)
         response.set_cookie(
             "forum_refresh", str(refresh),
-            max_age=int(timedelta(days=7).total_seconds()),
+            max_age=int(refresh_life.total_seconds()),
             httponly=True, samesite="Lax", secure=secure,
-            path="/",
+            path=REFRESH_COOKIE_PATH,
         )
         return response
 
@@ -200,32 +231,33 @@ class LogoutView(APIView):
         refresh_token = (request.COOKIES.get("forum_refresh")
                          or (request.data or {}).get("refresh"))
         response = Response(status=status.HTTP_204_NO_CONTENT)
+
+        def _clear():
+            response.delete_cookie("forum_access", path="/")
+            response.delete_cookie("forum_refresh", path=REFRESH_COOKIE_PATH)
+
         if not refresh_token:
             # даже без токена чистим куки — сессия всё равно завершается
-            response.delete_cookie("forum_access", path="/")
-            response.delete_cookie("forum_refresh", path="/")
+            _clear()
             return response
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()  # добавляет jti в blacklist
         except Exception:
-            response.delete_cookie("forum_access", path="/")
-            response.delete_cookie("forum_refresh", path="/")
+            _clear()
             return response
-        response.delete_cookie("forum_access", path="/")
-        response.delete_cookie("forum_refresh", path="/")
+        _clear()
         return response
 
 
 class RefreshView(APIView):
-    """Обновление access-куки по refresh-куке (для фронтенда после истечения 24ч)."""
+    """Обновление access-куки по refresh-куке (для фронтенда после истечения
+    короткого access-токена — 15 минут)."""
 
     authentication_classes = []
     permission_classes = [AllowAny]
 
     def post(self, request):
-        from datetime import timedelta
-
         from rest_framework_simplejwt.tokens import RefreshToken
 
         # refresh-токен живёт в httpOnly-куке даже после истечения access,
@@ -253,21 +285,22 @@ class RefreshView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
             response.delete_cookie("forum_access", path="/")
-            response.delete_cookie("forum_refresh", path="/")
+            response.delete_cookie("forum_refresh", path=REFRESH_COOKIE_PATH)
             return response
 
-        secure = os.environ.get("DJANGO_SECURE_COOKIES", "0") == "1"
+        access_life, refresh_life = _jwt_conf()
+        secure = _cookie_secure()
         response = Response({"user": MeSerializer(user).data})
         response.set_cookie(
             "forum_access", str(new.access_token),
-            max_age=int(timedelta(hours=24).total_seconds()),
+            max_age=int(access_life.total_seconds()),
             httponly=True, samesite="Lax", secure=secure, path="/",
         )
         response.set_cookie(
             "forum_refresh", str(new),
-            max_age=int(timedelta(days=7).total_seconds()),
+            max_age=int(refresh_life.total_seconds()),
             httponly=True, samesite="Lax", secure=secure,
-            path="/",
+            path=REFRESH_COOKIE_PATH,
         )
         return response
 
