@@ -107,7 +107,7 @@ export default function Header() {
                       to="/reports"
                       onClick={() => setMenuOpen(false)}
                     >
-                      🛡️ Жалобы
+                      Жалобы
                       {pendingReports > 0 && (
                         <span className="notif-badge">
                           {pendingReports > 99 ? '99+' : pendingReports}
