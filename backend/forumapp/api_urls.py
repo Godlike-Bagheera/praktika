@@ -29,6 +29,15 @@ urlpatterns = [
     # Без слэша: фронт обращается к /api/posts/export (nginx проксирует как есть)
     path("posts/export", views.PostsExportView.as_view(),
          name="posts-export"),
+    path("posts/<int:post_id>/report/", views.ReportCreateView.as_view(),
+         name="post-report"),
+
+    # Reports (модерация, admin only)
+    path("reports/pending-count/", views.PendingReportsCountView.as_view(),
+         name="reports-pending-count"),
+    path("reports/<int:pk>/action/", views.ReportActionView.as_view(),
+         name="report-action"),
+    path("reports/", views.ReportListView.as_view(), name="reports-list"),
     # Notifications
     path("notifications", views.NotificationListView.as_view(),
          name="notification-list"),
