@@ -5,7 +5,7 @@ import { api } from './api';
 
 const NotificationsContext = createContext(null);
 
-export const NOTIF_POLL_MS = 15000; // период опроса новых упоминаний
+export const NOTIF_POLL_MS = 20000; // период фонового опроса новых упоминаний (20 сек)
 export const TOAST_TTL_MS = 5000;   // тост живёт 5 секунд, затем плавно исчезает
 const TOAST_FADE_MS = 400;          // длительность плавного исчезновения (совпадает с CSS)
 
@@ -80,27 +80,24 @@ export function NotificationsProvider({ children }) {
       setUnread(countData.count ?? 0);
 
       const items = recent.results ?? recent ?? [];
-      // При первом опросе помечаем всё уже существующее как «увиденное»,
-      // но НЕ скрываем свежие упоминания: всплываем только то, что создано
-      // за последние ~20 секунд (между двумя интервалами опроса). Так новые
-      // упоминания показываются тостом почти мгновенно, а старые — никогда.
-      const FRESH_WINDOW_MS = (NOTIF_POLL_MS * 2) * 1000; // запас от джиттера часов
-      const nowMs = Date.now();
-      const isFresh = (it) => {
-        const t = new Date(it.created_at).getTime();
-        return Number.isFinite(t) && nowMs - t <= FRESH_WINDOW_MS;
-      };
+      // Ключ дедупликации — ID уведомления (Set в useRef), а НЕ created_at:
+      // сравнение по времени с таймзонами давало бы и дубли, и молчание.
+      //   • Первый опрос после монтирования (F5): показываем непрочитанные
+      //     из ленты один раз и заносим их в Set — при следующем опросе или
+      //     повторной перезагрузке те же ID уже в Set, дублей нет.
+      //   • Каждый последующий опрос: тост только для ID, которых нет в Set.
+      const addSeen = (it) => seenIdsRef.current.add(it.id);
       if (!initializedRef.current) {
-        const toShow = items.filter((it) => !seenIdsRef.current.has(it.id) && isFresh(it));
-        items.forEach((it) => seenIdsRef.current.add(it.id));
+        const toShow = items.filter((it) => !seenIdsRef.current.has(it.id));
+        items.forEach(addSeen);
         initializedRef.current = true;
         if (toShow.length) {
           setToasts((list) => [...toShow.map((it) => ({ ...it, me: user.username })), ...list].slice(0, 4));
         }
         return;
       }
-      const fresh = items.filter((it) => !seenIdsRef.current.has(it.id) && isFresh(it));
-      items.forEach((it) => seenIdsRef.current.add(it.id));
+      const fresh = items.filter((it) => !seenIdsRef.current.has(it.id));
+      items.forEach(addSeen);
       if (fresh.length) {
         setToasts((list) => [...fresh.map((it) => ({ ...it, me: user.username })), ...list].slice(0, 4));
       }
@@ -120,7 +117,15 @@ export function NotificationsProvider({ children }) {
     initializedRef.current = false;
     poll();
     const timer = setInterval(poll, NOTIF_POLL_MS);
-    return () => clearInterval(timer);
+    // Внеочередной опрос, когда пользователь возвращается во вкладку.
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') poll();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [user, poll]);
 
   return (
