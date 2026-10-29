@@ -12,7 +12,7 @@ import { api, errorMessage } from '../api';
 function HBarChart({ items, colorClass, valueLabel }) {
   const max = Math.max(1, ...items.map((i) => i.value));
   if (!items.length) {
-    return <p className="text-muted small mb-0">Пока нет данных.</p>;
+    return <p className="text-body-secondary small mb-0">Пока нет данных.</p>;
   }
   return (
     <div className="stats-bars">

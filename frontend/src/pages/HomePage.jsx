@@ -174,7 +174,7 @@ export default function HomePage() {
                     <span className="cat-icon">{cat.name.charAt(0).toUpperCase()}</span>
                     <Link
                       to={`/categories/${cat.id}`}
-                      className="text-decoration-none fw-semibold fs-5 text-dark category-link"
+                      className="text-decoration-none fw-semibold fs-5 text-body category-link"
                     >
                       {cat.name}
                     </Link>

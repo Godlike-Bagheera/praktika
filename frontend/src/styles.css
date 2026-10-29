@@ -12,9 +12,22 @@ html {
 }
 
 body {
-  background-color: #f1f3f9;
-  color: var(--ink);
+  background-color: var(--bs-body-bg, #f1f3f9);
+  color: var(--bs-body-color, var(--ink));
   font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ---------- Cards & hover ---------- */
+.card-hover {
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  cursor: pointer;
+  border: 1px solid var(--bs-border-color, #e5e7eb);
+}
+
+.card-hover:hover {
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.14);
+  transform: translateY(-3px);
+  border-color: #c7d2fe;
 }
 
 /* ---------- Header ---------- */
@@ -72,19 +85,6 @@ body {
   font-weight: 600;
 }
 
-/* ---------- Cards & hover ---------- */
-.card-hover {
-  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
-  cursor: pointer;
-  border: 1px solid #e5e7eb;
-}
-
-.card-hover:hover {
-  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.14);
-  transform: translateY(-3px);
-  border-color: #c7d2fe;
-}
-
 .cat-icon {
   display: inline-flex;
   align-items: center;
@@ -103,7 +103,7 @@ body {
 .list-group-item {
   border-radius: 10px !important;
   margin-bottom: 8px;
-  border: 1px solid #e5e7eb !important;
+  border: 1px solid var(--bs-border-color, #e5e7eb) !important;
   transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -126,7 +126,7 @@ body {
 /* ---------- Posts ---------- */
 .post-card {
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--bs-border-color, #e5e7eb);
   border-left: 4px solid var(--brand);
 }
 
@@ -285,8 +285,8 @@ pre-wrap {
   text-align: center;
   padding: 40px 20px;
   color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
+  background: var(--bs-body-bg, #fff);
+  border: 1px dashed var(--bs-border-color, #cbd5e1);
   border-radius: 12px;
 }
 
@@ -329,9 +329,9 @@ pre-wrap {
   height: 42px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: var(--ink);
+  border: 1px solid var(--bs-border-color, #e5e7eb);
+  background: var(--bs-body-bg, #fff);
+  color: var(--bs-body-color, var(--ink));
   font-weight: 600;
   font-size: 0.98rem;
   line-height: 1;
@@ -388,16 +388,16 @@ pre-wrap {
 .profile-menu-dropdown {
   position: absolute; right: 0; top: calc(100% + 10px); z-index: 1050;
   min-width: 240px; padding: .5rem; border-radius: 14px;
-  background: #fff; color: #1f2430; box-shadow: 0 12px 32px rgba(16, 24, 40, .18);
+  background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #1f2430); box-shadow: 0 12px 32px rgba(16, 24, 40, .18);
   animation: profileMenuIn .14s ease-out;
 }
 @keyframes profileMenuIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .profile-menu-item {
   display: block; width: 100%; text-align: left; border: 0; background: transparent;
-  padding: .5rem .7rem; border-radius: 10px; font-size: .92rem; color: #1f2430;
+  padding: .5rem .7rem; border-radius: 10px; font-size: .92rem; color: var(--bs-body-color, #1f2430);
   text-decoration: none; cursor: pointer;
 }
-.profile-menu-item:hover { background: #f1f4f9; }
+.profile-menu-item:hover { background: var(--bs-tertiary-bg, #f1f4f9); }
 .profile-menu-item.is-danger { color: #c0392b; }
 .profile-menu-item.is-danger:hover { background: #fdeceb; }
 
@@ -408,13 +408,13 @@ pre-wrap {
    не «прыгала» при переходе «загрузка → данные» */
 .stats-loading { min-height: 420px; }
 .stats-tile {
-  background: #fff; border-radius: 16px; padding: 1rem 1.2rem;
+  background: var(--bs-body-bg, #fff); border-radius: 16px; padding: 1rem 1.2rem;
   box-shadow: 0 6px 18px rgba(16, 24, 40, .06); text-align: center;
 }
 .stats-tile-value { font-size: 1.7rem; font-weight: 800; color: #4f46e5; line-height: 1.2; }
 .stats-tile-label { font-size: .85rem; color: #6b7280; }
 .stats-card {
-  background: #fff; border-radius: 16px; padding: 1.2rem 1.4rem; height: 100%;
+  background: var(--bs-body-bg, #fff); border-radius: 16px; padding: 1.2rem 1.4rem; height: 100%;
   box-shadow: 0 6px 18px rgba(16, 24, 40, .06);
 }
 .stats-card-title { font-size: 1.05rem; font-weight: 700; margin-bottom: 0; }
@@ -423,9 +423,9 @@ pre-wrap {
 .stats-bars { display: flex; flex-direction: column; gap: .55rem; }
 .stats-bar-row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr auto; align-items: center; gap: .7rem; }
 .stats-bar-label { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stats-bar-label a { color: #1f2430; text-decoration: none; }
+.stats-bar-label a { color: var(--bs-body-color, #1f2430); text-decoration: none; }
 .stats-bar-label a:hover { color: #4f46e5; text-decoration: underline; }
-.stats-bar-track { background: #eef1f6; border-radius: 999px; height: 14px; overflow: hidden; }
+.stats-bar-track { background: var(--bs-secondary-bg, #eef1f6); border-radius: 999px; height: 14px; overflow: hidden; }
 .stats-bar-fill { height: 100%; border-radius: 999px; min-width: 4px; transition: width .4s ease; }
 .stats-bar-fill.is-brand { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
 .stats-bar-fill.is-accent { background: linear-gradient(90deg, #f59e0b, #f97316); }
@@ -457,7 +457,7 @@ pre-wrap {
 }
 .notif-toast {
   position: relative; padding: 12px 34px 12px 14px; border-radius: 12px;
-  background: #fff; border: 1px solid #e3e8f0;
+  background: var(--bs-body-bg, #fff); border: 1px solid var(--bs-border-color, #e3e8f0);
   box-shadow: 0 10px 30px rgba(30, 27, 75, .18);
   animation: notif-slide-in .35s ease both;
 }
@@ -475,7 +475,7 @@ pre-wrap {
   font-size: 1.15rem; line-height: 1; color: #9aa3b2; cursor: pointer;
 }
 .notif-toast-close:hover { color: #374151; }
-.notif-toast-title { font-size: .85rem; color: #374151; margin-bottom: 4px; }
+.notif-toast-title { font-size: .85rem; color: var(--bs-body-color, #374151); margin-bottom: 4px; }
 .notif-toast-from { color: var(--brand); font-weight: 600; }
 .notif-toast-text {
   font-size: .82rem; color: #6b7280; overflow: hidden;
@@ -490,22 +490,22 @@ pre-wrap {
 .notifications-page .page-title { font-size: 1.4rem; font-weight: 700; }
 .notif-empty {
   padding: 28px; text-align: center; color: #6b7280; font-size: .9rem;
-  background: #fff; border: 1px dashed #d7dce6; border-radius: 12px;
+  background: var(--bs-body-bg, #fff); border: 1px dashed var(--bs-border-color, #d7dce6); border-radius: 12px;
 }
 .notif-list { display: flex; flex-direction: column; gap: 10px; }
 .notif-item {
   display: block; padding: 14px 16px; border-radius: 12px; text-decoration: none;
-  background: #fff; border: 1px solid #e3e8f0; color: inherit;
+  background: var(--bs-body-bg, #fff); border: 1px solid var(--bs-border-color, #e3e8f0); color: inherit;
   transition: box-shadow .15s ease, border-color .15s ease;
 }
 .notif-item:hover { border-color: #c7bffb; box-shadow: 0 4px 14px rgba(99, 102, 241, .12); }
-.notif-item.is-unread { border-left: 4px solid var(--brand); background: #f6f4ff; }
+.notif-item.is-unread { border-left: 4px solid var(--brand); background: var(--bs-primary-bg-subtle, #f6f4ff); }
 .notif-item-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; font-size: .85rem; }
 .notif-item-head strong { color: var(--brand); }
-.notif-item-where { color: #4b5563; }
+.notif-item-where { color: var(--bs-body-color, #4b5563); }
 .notif-item-date { margin-left: auto; color: #9aa3b2; font-size: .76rem; white-space: nowrap; }
 .notif-item-text {
-  margin-top: 6px; font-size: .85rem; color: #374151; overflow: hidden;
+  margin-top: 6px; font-size: .85rem; color: var(--bs-body-color, #374151); overflow: hidden;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
 }
 
@@ -525,4 +525,114 @@ pre-wrap {
 @keyframes modal-pop-in {
   from { opacity: 0; transform: translateY(12px) scale(.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---------------------------------------------------------------------------
+   Тёмная тема (нативный механизм Bootstrap 5.3: data-bs-theme на <html>)
+--------------------------------------------------------------------------- */
+[data-bs-theme="dark"] {
+  --brand: #8b93f8;        /* чуть светлее для контраста на тёмном фоне */
+  --brand-dark: #a5b4fc;
+}
+
+/* Шапка авторизации — белая карточка поверх тёмного градиента фона,
+   всегда остаётся светлой независимо от темы */
+[data-bs-theme="dark"] .auth-card {
+  color-scheme: light;
+  --bs-body-bg: #fff;
+  --bs-body-color: #1f2430;
+  --bs-border-color: #dee2e6;
+}
+
+/* Подсветка поста из уведомления: жёлтый фон только в светлой теме,
+   чтобы в тёмной не «взрывался» */
+[data-bs-theme="dark"] .post-card.post-highlight {
+  animation-name: post-highlight-fade-dark;
+}
+
+@keyframes post-highlight-fade-dark {
+  0%, 60% { background-color: rgba(139, 147, 248, 0.18); }
+  100% { background-color: transparent; }
+}
+
+/* Иконки категорий/счётчики в тёмной теме */
+[data-bs-theme="dark"] .cat-icon {
+  background: linear-gradient(135deg, #2b335c, #374151);
+  color: #c7d2fe;
+}
+
+[data-bs-theme="dark"] .count-badge {
+  background: #2b335c;
+  color: #c7d2fe;
+}
+
+[data-bs-theme="dark"] .edited-badge {
+  background: #4a3d17;
+  color: #fbbf24;
+}
+
+/* Плавный переход цветов при смене темы */
+body, .card, .form-control, .btn, .navbar {
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+/* Фикс для скроллбара в тёмной теме */
+[data-bs-theme="dark"] ::-webkit-scrollbar-thumb {
+  background-color: #495057;
+}
+[data-bs-theme="dark"] ::-webkit-scrollbar-track {
+  background-color: #212529;
+}
+
+/* ---------- Переключатель темы (солнце/луна) ---------- */
+.theme-toggle {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.theme-toggle .theme-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(0deg) scale(0.6);
+  opacity: 0;
+  transition: opacity 0.25s ease-in-out, transform 0.25s ease-in-out;
+}
+
+/* В светлой теме активна луна (предлагаем переключиться на тёмную),
+   в тёмной — солнце */
+[data-bs-theme="dark"] .theme-toggle .icon-sun {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0deg) scale(1);
+}
+
+[data-bs-theme="light"] .theme-toggle .icon-moon,
+.theme-toggle .icon-moon {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0deg) scale(1);
+}
+
+[data-bs-theme="dark"] .theme-toggle .icon-moon {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-90deg) scale(0.6);
+}
+
+[data-bs-theme="light"] .theme-toggle .icon-sun {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(90deg) scale(0.6);
 }
