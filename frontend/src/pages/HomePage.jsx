@@ -185,18 +185,22 @@ export default function HomePage() {
                   )}
                   <div className="mt-auto pt-3">
                     {isAdmin ? (
-                      <div className="d-flex gap-2">
+                      <div className="topic-actions d-flex gap-1">
                         <button
-                          className="btn btn-sm btn-outline-secondary"
+                          type="button"
+                          className="btn btn-sm btn-action btn-action-edit"
                           onClick={() => openEdit(cat)}
+                          title="Редактировать категорию"
                         >
-                          Редактировать
+                          <span className="btn-icon">✏️</span>
                         </button>
                         <button
-                          className="btn btn-sm btn-outline-danger"
+                          type="button"
+                          className="btn btn-sm btn-action btn-action-delete"
                           onClick={() => remove(cat)}
+                          title="Удалить категорию"
                         >
-                          Удалить
+                          <span className="btn-icon">🗑</span>
                         </button>
                       </div>
                     ) : (
