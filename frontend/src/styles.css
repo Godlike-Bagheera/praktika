@@ -700,3 +700,124 @@ body, .card, .form-control, .btn, .navbar {
   opacity: 0;
   transform: translate(-50%, -50%) rotate(90deg) scale(0.6);
 }
+
+/* === Единый стиль для кнопок действий (иконки) === */
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.btn-action .btn-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.btn-action:hover {
+  transform: translateY(-1px);
+}
+
+.btn-action:active {
+  transform: translateY(0);
+}
+
+/* Кнопка "Пожаловаться" — нейтральная, не красная */
+.btn-action-report {
+  color: var(--bs-secondary-color, #6c757d);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  background-color: transparent;
+}
+
+.btn-action-report:hover {
+  color: #fd7e14;
+  border-color: #fd7e14;
+  background-color: rgba(253, 126, 20, 0.1);
+}
+
+/* Кнопка "Удалить" — красная (danger) */
+.btn-action-delete {
+  color: var(--bs-danger, #dc3545);
+  border: 1px solid var(--bs-danger, #dc3545);
+  background-color: transparent;
+}
+
+.btn-action-delete:hover {
+  background-color: var(--bs-danger, #dc3545);
+  color: #fff;
+}
+
+/* Кнопка "Редактировать" — синяя/нейтральная */
+.btn-action-edit {
+  color: var(--bs-primary, #0d6efd);
+  border: 1px solid var(--bs-primary, #0d6efd);
+  background-color: transparent;
+}
+
+.btn-action-edit:hover {
+  background-color: var(--bs-primary, #0d6efd);
+  color: #fff;
+}
+
+/* Адаптация для тёмной темы */
+[data-bs-theme="dark"] .btn-action-report {
+  color: #adb5bd;
+  border-color: #495057;
+}
+
+[data-bs-theme="dark"] .btn-action-report:hover {
+  color: #fd7e14;
+  border-color: #fd7e14;
+  background-color: rgba(253, 126, 20, 0.15);
+}
+
+[data-bs-theme="dark"] .btn-action-delete {
+  color: #ff6b7a;
+  border-color: #ff6b7a;
+}
+
+[data-bs-theme="dark"] .btn-action-delete:hover {
+  background-color: #dc3545;
+  color: #fff;
+  border-color: #dc3545;
+}
+
+[data-bs-theme="dark"] .btn-action-edit {
+  color: #6ea8fe;
+  border-color: #6ea8fe;
+}
+
+[data-bs-theme="dark"] .btn-action-edit:hover {
+  background-color: #0d6efd;
+  color: #fff;
+  border-color: #0d6efd;
+}
+
+/* Состояние disabled */
+.btn-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Дропдаун жалобы под новой кнопкой-иконкой */
+.report-widget .dropdown-menu,
+.report-widget .report-menu {
+  margin-top: 4px;
+  z-index: 1050;
+  min-width: 200px;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+[data-bs-theme="dark"] .report-widget .dropdown-menu,
+[data-bs-theme="dark"] .report-widget .report-menu {
+  background-color: #212529;
+  border-color: #495057;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+}
