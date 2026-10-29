@@ -893,7 +893,7 @@ class NotificationSerializer(serializers.Serializer):
 
     id = serializers.IntegerField()
     post_id = serializers.IntegerField(source="post.id")
-    text = serializers.CharField(source="post.text", max_length=2000)
+    text = serializers.SerializerMethodField()
     created_at = serializers.DateTimeField(source="post.created_at")
     read_at = serializers.DateTimeField(allow_null=True)
     from_user = serializers.SerializerMethodField()
@@ -902,6 +902,21 @@ class NotificationSerializer(serializers.Serializer):
     category_id = serializers.IntegerField(source="post.topic.category_id")
     category_name = serializers.CharField(source="post.topic.category.name", max_length=100)
 
+    def get_text(self, obj):
+        """Текст уведомления.
+
+        Если уведомление создано из-за жалобы (на посте есть жалоба от ДРУГОГО
+        пользователя) — показываем понятный текст о жалобе вместо сырого текста
+        поста; иначе — обычный текст поста (упоминание @username)."""
+        report = obj.post.reports.exclude(user=obj.user).order_by(
+            "-created_at").first()
+        if report is not None:
+            reason = dict(PostReport.Reason.choices).get(
+                report.reason, report.reason)
+            return (f"Пользователь {report.user.username} пожаловался "
+                    f"({reason}) на это сообщение.")
+        return obj.post.text
+
     def get_from_user(self, obj):
         return {"id": obj.post.owner_id, "username": obj.post.owner.username}
 
@@ -909,7 +924,8 @@ class NotificationSerializer(serializers.Serializer):
 def _mention_qs(user):
     return (
         UserMention.objects.filter(user=user)
-        .select_related("post__owner", "post__topic__category")
+        .select_related("post__owner", "post__topic__category", "user")
+        .prefetch_related("post__reports__user")
         .order_by("-created_at", "-id")
     )
 
@@ -993,10 +1009,12 @@ class ReportCreateView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         try:
             with transaction.atomic():
-                serializer.save(user=request.user)
-                # Вариант А: уведомляем админов о новой жалобе через существующую
-                # систему уведомлений (UserMention → колокольчик в хедере).
-                notify_admins_about_report(post, request.user)
+                report = serializer.save(user=request.user)
+                # Уведомляем ВСЕХ активных админов о новой жалобе через
+                # существующую систему (UserMention → колокольчик в хедере).
+                print(f"Report created: user={request.user.username}, "
+                      f"post={report.post.id}")
+                notify_admins_about_report(report.post, request.user)
         except IntegrityError:
             # Гонка: два параллельных запроса жалобы от одного пользователя.
             return Response(

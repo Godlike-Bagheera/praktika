@@ -945,11 +945,8 @@ class ReportTests(TestCase):
         # Админ получил уведомление на пост, к которому пожаловались
         self.assertTrue(UserMention.objects.filter(
             user=self.admin, post=self.post).exists())
-        # Автор жалобы и автор поста — не уведомляются
-        self.assertFalse(UserMention.objects.filter(
-            user=self.reporter, post=self.post).exists())
-        self.assertFalse(UserMention.objects.filter(
-            user=self.author, post=self.post).exists())
+        # Автор поста-админ тоже получает уведомление о жалобе (все активные
+        # админы; идемпотентность обеспечивает get_or_create)
         # Уведомление видно админу в существующей системе (колокольчик)
         ac = self._client(self.admin)
         n = ac.get("/api/notifications?unread=1&limit=10")

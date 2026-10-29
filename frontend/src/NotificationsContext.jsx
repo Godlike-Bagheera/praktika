@@ -14,12 +14,17 @@ const TOAST_FADE_MS = 400;          // длительность плавного
 function Toast({ toast, onDismiss }) {
   const timerRef = useRef(null);
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
 
   useEffect(() => {
     timerRef.current = setTimeout(() => onDismiss(toast.id), TOAST_TTL_MS);
     return () => clearTimeout(timerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Если в тексте поста есть жалоба от модерационной системы — для админа
+  // показываем специальный заголовок.
+  const isReportToast = isAdmin && toast.is_report;
 
   return (
     <div className={`notif-toast ${toast.leaving ? 'is-leaving' : ''}`}>
@@ -32,8 +37,17 @@ function Toast({ toast, onDismiss }) {
         ×
       </button>
       <div className="notif-toast-title">
-        <span className="notif-toast-from">@{toast.me}</span> — вас упомянул{' '}
-        <strong>{toast.from_user?.username}</strong>
+        {isReportToast ? (
+          <>
+            Новая жалоба на сообщение в теме{' '}
+            <strong>{toast.topic_title}</strong>
+          </>
+        ) : (
+          <>
+            <span className="notif-toast-from">@{toast.me}</span> — вас упомянул{' '}
+            <strong>{toast.from_user?.username}</strong>
+          </>
+        )}
       </div>
       <div className="notif-toast-text">{toast.text}</div>
       <a

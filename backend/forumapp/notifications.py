@@ -1,11 +1,14 @@
-"""Генерация уведомлений о упоминаниях (@username) в сообщениях."""
+"""Генерация уведомлений о упоминаниях (@username) и жалобах в сообщениях."""
 
+import logging
 import re
 
 from django.contrib.auth import get_user_model
 from django.db.models.functions import Lower
 
 from .models import Post, UserMention
+
+logger = logging.getLogger(__name__)
 
 # @имя: буквы (включая кириллицу), цифры, подчёркивание; длина как у username.
 MENTION_RE = re.compile(r"@([\wА-Яа-яЁё]{1,150})")
@@ -50,29 +53,29 @@ def notify_mentions(post: Post) -> set:
 
 
 def notify_admins_about_report(post: Post, reporter) -> int:
-    """Вариант А: уведомить админов о новой жалобе через существующую систему.
+    """Создать уведомление-«колокольчик» (UserMention) для ВСЕХ активных админов
+    о новой жалобе на пост.
 
-    Создаёт UserMention (уведомление-«колокольчик») для каждого администратора
-    на пост, к которому отправлена жалоба. Автор жалобы и автор поста не
-    уведомляются. Уже существующие уведомления пропускаются (идемпотентно).
-    Возвращает количество созданных уведомлений.
+    Идемпотентно: если у админа уже есть уведомление по этому посту — дубль не
+    создаётся (уникальный запрет unique_mention_per_post). Возвращает количество
+    созданных уведомлений.
     """
     User = get_user_model()
-    admin_ids = list(
-        User.objects.filter(role=User.Role.ADMIN)
-        .exclude(pk__in=[post.owner_id, getattr(reporter, "pk", None)])
-        .values_list("pk", flat=True)
-    )
-    if not admin_ids:
-        return 0
-    already = set(
-        UserMention.objects.filter(post=post, user_id__in=admin_ids)
-        .values_list("user_id", flat=True)
-    )
-    to_create = [
-        UserMention(user_id=pk, post=post)
-        for pk in admin_ids if pk not in already
-    ]
-    if to_create:
-        UserMention.objects.bulk_create(to_create)
-    return len(to_create)
+    admins = User.objects.filter(role=User.Role.ADMIN, is_active=True)
+
+    created_count = 0
+    for admin in admins:
+        mention, created = UserMention.objects.get_or_create(
+            user=admin,
+            post=post,
+            defaults={"read_at": None},
+        )
+        if created:
+            created_count += 1
+            message = (
+                f"Created notification for admin {admin.username} "
+                f"about post {post.id}"
+            )
+            print(message)
+            logger.info(message)
+    return created_count
