@@ -15,6 +15,7 @@ import TopicPage from './pages/TopicPage';
 import PostEditPage from './pages/PostEditPage';
 import StatsPage from './pages/StatsPage';
 import NotificationsPage from './pages/NotificationsPage';
+import ReportsPage from './pages/ReportsPage';
 
 function Booting() {
   return (
@@ -91,6 +92,9 @@ function AppRoutes() {
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/stats" element={<AdminRoute />}>
           <Route index element={<StatsPage />} />
+        </Route>
+        <Route path="/reports" element={<AdminRoute />}>
+          <Route index element={<ReportsPage />} />
         </Route>
         <Route path="/categories/:id" element={<CategoryPage />} />
         <Route path="/topics/new" element={<TopicCreatePage />} />
