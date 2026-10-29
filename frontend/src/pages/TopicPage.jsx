@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext';
 import Alert from '../components/Alert';
 import Pagination from '../components/Pagination';
 import PostEditModal from '../components/PostEditModal';
+import ReportButton from '../components/ReportButton';
 import Spinner from '../components/Spinner';
 
 // Сколько постов тянем одной страницей при «перелёте» к посту по ссылке
@@ -388,26 +389,34 @@ export default function TopicPage() {
                         {p.updated_at !== p.created_at && (
                           <span className="edited-badge">изменено</span>
                         )}
+                        {/* Пометка для админа: пост скрыт модератором (обычные юзеры его не видят) */}
+                        {isAdmin && p.is_hidden && (
+                          <span className="badge text-bg-danger">Скрыто модератором</span>
+                        )}
                       </div>
                     </div>
-                    {(p.owner.id === user?.id || isAdmin) && (
-                      <div className="post-actions d-flex gap-1 flex-shrink-0">
-                        {p.owner.id === user?.id && (
+                    <div className="post-actions d-flex gap-1 flex-shrink-0 align-items-center">
+                      {(p.owner.id === user?.id || isAdmin) && (
+                        <>
+                          {p.owner.id === user?.id && (
+                            <button
+                              className="btn btn-sm btn-outline-secondary px-2"
+                              onClick={() => setEditingPost(p)}
+                            >
+                              Изменить
+                            </button>
+                          )}
                           <button
-                            className="btn btn-sm btn-outline-secondary px-2"
-                            onClick={() => setEditingPost(p)}
+                            className="btn btn-sm btn-outline-danger px-2"
+                            onClick={() => deletePost(p)}
                           >
-                            Изменить
+                            Удалить
                           </button>
-                        )}
-                        <button
-                          className="btn btn-sm btn-outline-danger px-2"
-                          onClick={() => deletePost(p)}
-                        >
-                          Удалить
-                        </button>
-                      </div>
-                    )}
+                        </>
+                      )}
+                      {/* Жалоба — доступна всем авторизованным, кроме автора поста */}
+                      <ReportButton postId={p.id} isOwnPost={p.owner.id === user?.id} />
+                    </div>
                   </div>
                 </div>
               ))}
