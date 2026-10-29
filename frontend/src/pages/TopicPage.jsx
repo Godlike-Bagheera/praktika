@@ -245,32 +245,12 @@ export default function TopicPage() {
                 <div key={p.id} className="card post-card shadow-sm mb-2">
                   <div className="card-body py-2 d-flex gap-3 align-items-center">
                     <span className="post-avatar">{p.owner.username.charAt(0).toUpperCase()}</span>
-                    <div className="flex-grow-1">
-                      <div className="post-row">
-                        <div
-                          className="post-text"
-                          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                        >
-                          {p.text}
-                        </div>
-                        {(p.owner.id === user?.id || isAdmin) && (
-                          <div className="post-actions d-flex gap-1 ms-3 flex-shrink-0 align-items-center">
-                            {p.owner.id === user?.id && (
-                              <button
-                                className="btn btn-sm btn-outline-secondary px-2"
-                                onClick={() => setEditingPost(p)}
-                              >
-                                Изменить
-                              </button>
-                            )}
-                            <button
-                              className="btn btn-sm btn-outline-danger px-2"
-                              onClick={() => deletePost(p)}
-                            >
-                              Удалить
-                            </button>
-                          </div>
-                        )}
+                    <div className="flex-grow-1 min-w-0">
+                      <div
+                        className="post-text"
+                        style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                      >
+                        {p.text}
                       </div>
                       <div className="text-muted-small mt-1 d-flex align-items-center gap-2 flex-wrap">
                         <span className="fw-semibold text-dark">{p.owner.username}</span>
@@ -281,6 +261,24 @@ export default function TopicPage() {
                         )}
                       </div>
                     </div>
+                    {(p.owner.id === user?.id || isAdmin) && (
+                      <div className="post-actions d-flex gap-1 flex-shrink-0">
+                        {p.owner.id === user?.id && (
+                          <button
+                            className="btn btn-sm btn-outline-secondary px-2"
+                            onClick={() => setEditingPost(p)}
+                          >
+                            Изменить
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-sm btn-outline-danger px-2"
+                          onClick={() => deletePost(p)}
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
