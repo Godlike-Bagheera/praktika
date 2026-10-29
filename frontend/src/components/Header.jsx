@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useNotifications } from '../NotificationsContext';
+import ThemeToggle from './ThemeToggle';
 
 export default function Header() {
   const { user, isAdmin, logout } = useAuth();
@@ -43,6 +44,7 @@ export default function Header() {
           Форум
         </Link>
         <div className="ms-auto d-flex align-items-center gap-2">
+          <ThemeToggle />
           {user && (
             <div className="profile-menu" ref={menuRef}>
               <button
