@@ -5,7 +5,7 @@ import { api } from './api';
 
 const NotificationsContext = createContext(null);
 
-export const NOTIF_POLL_MS = 20000; // период фонового опроса новых упоминаний (20 сек)
+const NOTIF_POLL_MS = 5000; // период фонового опроса новых упоминаний (20 сек)
 export const TOAST_TTL_MS = 5000;   // тост живёт 5 секунд, затем плавно исчезает
 const TOAST_FADE_MS = 400;          // длительность плавного исчезновения (совпадает с CSS)
 
