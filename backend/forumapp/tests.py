@@ -682,3 +682,105 @@ class NotificationMentionTests(TestCase):
         fresh = Client()
         self.assertEqual(fresh.get("/api/notifications").status_code, 401)
         self.assertEqual(fresh.get("/api/notifications/count").status_code, 401)
+
+
+class CookieSecurityTests(TestCase):
+    """Критерии приёмки security-batch: атрибуты куток, ротация, logout."""
+
+    def setUp(self):
+        self.c = Client()
+        self.u1 = User.objects.create_user(
+            email="ck@u.com", username="cookieuser", password="Zx9Kp7mQ2wLtr4!v"
+        )
+
+    def _login(self, client=None):
+        client = client or self.c
+        from django.core.cache import cache
+        cache.clear()
+        r = client.post(
+            "/api/auth/login",
+            data={"email": self.u1.email, "password": "Zx9Kp7mQ2wLtr4!v"},
+            content_type="application/json",
+        )
+        self.assertEqual(r.status_code, 200, r.content)
+        return r
+
+    def test_login_cookies_attributes(self):
+        r = self._login()
+        access = r.cookies["forum_access"]
+        refresh = r.cookies["forum_refresh"]
+        # access живёт ровно lifetime SIMPLE_JWT (15 минут = 900 сек)
+        self.assertEqual(access["max-age"], 900)
+        self.assertTrue(access["httponly"])
+        self.assertEqual(access["path"], "/")
+        # refresh-кука сузил путь до /api/auth/ (фикс 4)
+        self.assertEqual(refresh["path"], "/api/auth/")
+        self.assertTrue(refresh["httponly"])
+        # по умолчанию DJANGO_SECURE_COOKIES=1 -> Secure=True
+        self.assertTrue(access["secure"])
+        self.assertTrue(refresh["secure"])
+
+    def test_login_cookies_secure_flag_follows_env(self):
+        # secure читается из env при каждом запросе — мокаем 0 и проверяем снятие флага
+        from unittest.mock import patch
+        with patch.dict("os.environ", {"DJANGO_SECURE_COOKIES": "0"}):
+            r = self._login()
+        self.assertFalse(r.cookies["forum_access"]["secure"])
+        self.assertFalse(r.cookies["forum_refresh"]["secure"])
+        # остальные атрибуты не пострадали
+        self.assertTrue(r.cookies["forum_access"]["httponly"])
+        self.assertEqual(r.cookies["forum_access"]["max-age"], 900)
+
+    def test_refresh_rotates_cookies(self):
+        r_login = self._login()
+        old_refresh_value = r_login.cookies["forum_refresh"].value
+        # refresh со старой кукой -> новая access + РОТИРОВАННАЯ refresh-кука
+        r_ref = self.c.post("/api/auth/refresh", data={}, content_type="application/json")
+        self.assertEqual(r_ref.status_code, 200, r_ref.content)
+        new_refresh_value = r_ref.cookies["forum_refresh"].value
+        self.assertNotEqual(old_refresh_value, new_refresh_value)
+        self.assertEqual(r_ref.cookies["forum_access"]["max-age"], 900)
+        # старая refresh-кука после ротации в blacklist -> 401 (отдельный клиент
+        # без куки-джара, чтобы view не подхватил новый неротированный токен)
+        r_bad = Client().post(
+            "/api/auth/refresh",
+            data={"refresh": old_refresh_value},
+            content_type="application/json",
+        )
+        self.assertEqual(r_bad.status_code, 401)
+
+    def test_logout_clears_cookies(self):
+        self._login()
+        r = self.c.post("/api/auth/logout", data={}, content_type="application/json")
+        # LogoutView отвечает 204 No Content
+        self.assertIn(r.status_code, (200, 204), r.content)
+        # обе куки удалены: max-age=0 (expires в прошлом)
+        for name in ("forum_access", "forum_refresh"):
+            self.assertIn(name, r.cookies)
+            self.assertEqual(int(r.cookies[name]["max-age"]), 0)
+        # subsequent /api/auth/me -> 401
+        self.assertEqual(self.c.get("/api/auth/me").status_code, 401)
+
+
+class SecretKeyGuardTests(TestCase):
+    """Фикс 1: защита SECRET_KEY тестируется через чистую функцию get_secret_key()."""
+
+    def test_production_without_key_raises_value_error(self):
+        from forum.settings import get_secret_key
+        with self.assertRaises(ValueError) as ctx:
+            get_secret_key(debug=False, env={})
+        self.assertIn("DJANGO_SECRET_KEY", str(ctx.exception))
+
+    def test_debug_without_key_returns_dev_fallback_with_warning(self):
+        from forum.settings import get_secret_key, DEV_FALLBACK_SECRET_KEY
+        key, warning = get_secret_key(debug=True, env={})
+        self.assertEqual(key, DEV_FALLBACK_SECRET_KEY)
+        self.assertIsNotNone(warning)
+        self.assertIn("DEV SECRET_KEY", warning)
+
+    def test_explicit_key_wins_in_any_mode(self):
+        from forum.settings import get_secret_key
+        env = {"DJANGO_SECRET_KEY": "super-secret-value"}
+        self.assertEqual(get_secret_key(debug=False, env=env), ("super-secret-value", None))
+        self.assertEqual(get_secret_key(debug=True, env=env), ("super-secret-value", None))
+
