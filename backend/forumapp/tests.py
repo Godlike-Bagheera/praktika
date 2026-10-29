@@ -1,6 +1,6 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
-from forumapp.models import Category, Topic, Post, UserMention
+from forumapp.models import Category, Topic, Post, UserMention, PostReport
 from forumapp.notifications import notify_mentions
 from forumapp.serializers import CategorySerializer
 
@@ -784,3 +784,135 @@ class SecretKeyGuardTests(TestCase):
         self.assertEqual(get_secret_key(debug=False, env=env), ("super-secret-value", None))
         self.assertEqual(get_secret_key(debug=True, env=env), ("super-secret-value", None))
 
+
+
+class ReportTests(TestCase):
+    """Система жалоб на сообщения и модерация (админ)."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.author = User.objects.create_user(
+            email="author@t.com", username="author1", password="Zx9Kp7mQ2wLtr4!v")
+        self.reporter = User.objects.create_user(
+            email="reporter@t.com", username="reporter1", password="Zx9Kp7mQ2wLtr4!v")
+        self.admin = User.objects.create_user(
+            email="admin@t.com", username="adminrep", password="Zx9Kp7mQ2wLtr4!v",
+            role="admin")
+        self.cat = Category.objects.create(name="Общий")
+        self.topic = Topic.objects.create(category=self.cat, owner=self.author,
+                                          title="Тема для жалоб")
+        self.post = Post.objects.create(topic=self.topic, owner=self.author,
+                                        text="Провокационный текст")
+
+    @staticmethod
+    def _client(u):
+        from django.core.cache import cache
+        cache.clear()
+        c = Client()
+        r = c.post("/api/auth/login",
+                   data={"email": u.email, "password": "Zx9Kp7mQ2wLtr4!v"},
+                   content_type="application/json")
+        assert r.status_code == 200, r.content
+        return c
+
+    def test_report_creation(self):
+        c = self._client(self.reporter)
+        r = c.post(f"/api/posts/{self.post.id}/report/",
+                   data={"post": self.post.id, "reason": "spam"},
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 201)
+        self.assertTrue(PostReport.objects.filter(user=self.reporter,
+                                                  post=self.post).exists())
+
+    def test_report_on_own_post(self):
+        c = self._client(self.author)
+        r = c.post(f"/api/posts/{self.post.id}/report/",
+                   data={"post": self.post.id, "reason": "spam"},
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(PostReport.objects.count(), 0)
+
+    def test_duplicate_report(self):
+        c = self._client(self.reporter)
+        url = f"/api/posts/{self.post.id}/report/"
+        r1 = c.post(url, data={"post": self.post.id, "reason": "spam"},
+                    content_type="application/json")
+        self.assertEqual(r1.status_code, 201)
+        r2 = c.post(url, data={"post": self.post.id, "reason": "insult"},
+                    content_type="application/json")
+        self.assertEqual(r2.status_code, 400)
+        self.assertIn("уже жаловались", r2.content.decode())
+        self.assertEqual(PostReport.objects.count(), 1)
+
+    def test_report_requires_auth(self):
+        r = Client().post(f"/api/posts/{self.post.id}/report/",
+                          data={"post": self.post.id, "reason": "spam"},
+                          content_type="application/json")
+        self.assertEqual(r.status_code, 401)
+
+    def test_admin_resolve_report(self):
+        report = PostReport.objects.create(user=self.reporter, post=self.post,
+                                           reason="spam")
+        c = self._client(self.admin)
+        r = c.post(f"/api/reports/{report.id}/action/",
+                   data={"action": "resolve"}, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        report.refresh_from_db()
+        self.post.refresh_from_db()
+        self.assertEqual(report.status, PostReport.Status.RESOLVED)
+        self.assertTrue(self.post.is_hidden)
+
+    def test_admin_dismiss_report(self):
+        report = PostReport.objects.create(user=self.reporter, post=self.post,
+                                           reason="offtopic")
+        c = self._client(self.admin)
+        r = c.post(f"/api/reports/{report.id}/action/",
+                   data={"action": "dismiss"}, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        report.refresh_from_db()
+        self.post.refresh_from_db()
+        self.assertEqual(report.status, PostReport.Status.DISMISSED)
+        self.assertFalse(self.post.is_hidden)
+
+    def test_hidden_post_not_visible(self):
+        PostReport.objects.create(user=self.reporter, post=self.post,
+                                  reason="spam")
+        # Скрываем пост через действие админа (реальный путь)
+        ac = self._client(self.admin)
+        for rep in PostReport.objects.all():
+            ac.post(f"/api/reports/{rep.id}/action/",
+                    data={"action": "resolve"}, content_type="application/json")
+        self.post.refresh_from_db()
+        self.assertTrue(self.post.is_hidden)
+
+        url = f"/api/topics/{self.topic.id}/posts"
+        # Обычный пользователь скрытый пост не видит
+        uc = self._client(self.reporter)
+        body = uc.get(url).json()
+        ids = [p["id"] for p in body["results"]] if isinstance(body, dict) and "results" in body else [p["id"] for p in body]
+        self.assertNotIn(self.post.id, ids)
+
+        # Админ видит скрытый пост с пометкой is_hidden=True
+        abody = ac.get(url).json()
+        items = abody["results"] if isinstance(abody, dict) and "results" in abody else abody
+        hidden = [p for p in items if p["id"] == self.post.id]
+        self.assertEqual(len(hidden), 1)
+        self.assertTrue(hidden[0]["is_hidden"])
+
+    def test_pending_count(self):
+        PostReport.objects.create(user=self.reporter, post=self.post,
+                                  reason="spam")
+        p2 = Post.objects.create(topic=self.topic, owner=self.author,
+                                 text="Ещё один пост")
+        PostReport.objects.create(user=self.admin, post=p2, reason="other")
+        c = self._client(self.admin)
+        r = c.get("/api/reports/pending-count/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["count"], 2)
+        # Отклоняем одну — счётчик уменьшается
+        rep = PostReport.objects.first()
+        c.post(f"/api/reports/{rep.id}/action/", data={"action": "dismiss"},
+               content_type="application/json")
+        r2 = c.get("/api/reports/pending-count/")
+        self.assertEqual(r2.json()["count"], 1)
