@@ -453,6 +453,19 @@ class TopicPostsListView(APIView):
             qs = qs.filter(_build_search_q(search, ["text"]))
         # Новые сообщения всегда сверху (сортировка по убыванию времени)
         qs = qs.order_by("-created_at", "-id")
+        # Вспомогательный параметр для «перелёта» к посту из уведомления
+        # (?post=<id>): count при limit=1 отдаёт число сообщений, более новых,
+        # чем целевой пост — по нему фронт вычисляет нужную страницу.
+        after = request.query_params.get("after")
+        if after:
+            try:
+                target = Post.objects.only("created_at", "id").get(pk=int(after))
+            except (Post.DoesNotExist, ValueError, TypeError):
+                return Response(
+                    {"count": 0, "pages": 1, "page": 1, "limit": 1,
+                     "next": None, "previous": None, "results": []},
+                )
+            qs = qs.filter(created_at__gt=target.created_at)
         paginator = ForumPagination()
         page = paginator.paginate_queryset(qs, request)
         return paginator.get_paginated_response(

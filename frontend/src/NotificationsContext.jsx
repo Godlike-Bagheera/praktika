@@ -57,6 +57,15 @@ export function NotificationsProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const seenIdsRef = useRef(new Set());
   const initializedRef = useRef(false);
+  // Актуальные данные пользователя для poll — через ref, чтобы колбэк poll не
+  // пересоздавался при каждом обновлении объекта user (иначе useEffect ниже
+  // сбрасывал инициализацию и пересоздавал интервал на каждый render).
+  const userRef = useRef(user);
+  userRef.current = user;
+  // Счётчик смонтированного провайдера: защита от «гонки» — результаты
+  // асинхронного опроса применяются только если провайдер ещё жив и это тот
+  // же цикл инициализации.
+  const epochRef = useRef(0);
 
   const dismissToast = useCallback((id, markRead = true) => {
     setToasts((list) =>
@@ -72,11 +81,15 @@ export function NotificationsProvider({ children }) {
   }, []);
 
   const poll = useCallback(async () => {
+    const epoch = epochRef.current;
     try {
       const [{ data: countData }, { data: recent }] = await Promise.all([
         api.get('/notifications/count'),
         api.get('/notifications', { params: { unread: 1, limit: 10 } }),
       ]);
+      // провайдер перемонтирован (logout/login) или сменилась сессия —
+      // устаревший ответ не должен трогать состояние
+      if (epoch !== epochRef.current || !userRef.current) return;
       setUnread(countData.count ?? 0);
 
       const items = recent.results ?? recent ?? [];
@@ -87,34 +100,41 @@ export function NotificationsProvider({ children }) {
       //     повторной перезагрузке те же ID уже в Set, дублей нет.
       //   • Каждый последующий опрос: тост только для ID, которых нет в Set.
       const addSeen = (it) => seenIdsRef.current.add(it.id);
+      const username = userRef.current.username;
       if (!initializedRef.current) {
         const toShow = items.filter((it) => !seenIdsRef.current.has(it.id));
         items.forEach(addSeen);
         initializedRef.current = true;
         if (toShow.length) {
-          setToasts((list) => [...toShow.map((it) => ({ ...it, me: user.username })), ...list].slice(0, 4));
+          setToasts((list) => [...toShow.map((it) => ({ ...it, me: username })), ...list].slice(0, 4));
         }
         return;
       }
       const fresh = items.filter((it) => !seenIdsRef.current.has(it.id));
       items.forEach(addSeen);
       if (fresh.length) {
-        setToasts((list) => [...fresh.map((it) => ({ ...it, me: user.username })), ...list].slice(0, 4));
+        setToasts((list) => [...fresh.map((it) => ({ ...it, me: username })), ...list].slice(0, 4));
       }
     } catch {
       /* сеть/токен — следующий цикл разберётся */
     }
-  }, [user]);
+  }, []); // стабильный колбэк: интервал больше не пересоздаётся
 
   useEffect(() => {
     if (!user) {
+      epochRef.current += 1;
       setUnread(0);
       setToasts([]);
       initializedRef.current = false;
       seenIdsRef.current = new Set();
       return undefined;
     }
+    // сброс только при СМЕНЕ пользователя (login/logout), но не при каждом
+    // обновлении объекта user: иначе Set чистился бы между поллингами и
+    // одни и те же непрочитанные всплывали бы повторно («тосты после F5»)
+    epochRef.current += 1;
     initializedRef.current = false;
+    seenIdsRef.current = new Set();
     poll();
     const timer = setInterval(poll, NOTIF_POLL_MS);
     // Внеочередной опрос, когда пользователь возвращается во вкладку.
@@ -126,7 +146,8 @@ export function NotificationsProvider({ children }) {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [user, poll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   return (
     <NotificationsContext.Provider value={{ unread, refreshCount: poll }}>

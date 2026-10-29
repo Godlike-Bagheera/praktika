@@ -8,6 +8,10 @@ import Pagination from '../components/Pagination';
 import PostEditModal from '../components/PostEditModal';
 import Spinner from '../components/Spinner';
 
+// Сколько постов тянем одной страницей при «перелёте» к посту по ссылке
+// из уведомления (?post=<id>). Бэкенд ограничивает limit значением max_page_size.
+const POST_LOCATE_LIMIT = 100;
+
 export default function TopicPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -15,6 +19,10 @@ export default function TopicPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const search = searchParams.get('search') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
+  // ссылка вида /topics/:id?post=<id> из уведомлений — на какой странице
+  // находится нужный пост, заранее неизвестно (см. locatePost)
+  const targetPostParam = searchParams.get('post');
+  const targetPostId = Number.parseInt(targetPostParam, 10) || null;
 
   const [topic, setTopic] = useState(null);
   const [posts, setPosts] = useState([]);
@@ -22,6 +30,8 @@ export default function TopicPage() {
   const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // подсвеченный пост, к которому мы «перелетели» по ссылке из уведомления
+  const [highlightedPostId, setHighlightedPostId] = useState(null);
   // input — контролируемое поле поиска; searchParams обновляются с debounce
   const [inputValue, setInputValue] = useState(search);
 
@@ -43,6 +53,60 @@ export default function TopicPage() {
       .then((resp) => setTopic(resp.data))
       .catch((err) => setError(errorMessage(err)));
   }, [id]);
+
+  // «Перелёт» к посту по ссылке из уведомления (/topics/:id?post=<id>).
+  // Порядок постов — новые сверху, поэтому страница, на которой лежит пост,
+  // заранее неизвестна. Сортировка детерминированная (-created_at, -id), так
+  // что позицию можно вычислить одним лёгким запросом count более новых
+  // сообщений и открыть нужную страницу обычной пагинацией (limit=20).
+  // Фолбэк для старых бэкендов без параметра `after`: тянем одну крупную
+  // страницу (limit<=100 — максимум сервера) и находим пост в ней.
+  const locatePost = useCallback(
+    async (postId) => {
+      setLoading(true);
+      try {
+        // Фолбэк на случай, когда нужную страницу вычислить не удалось
+        // (старый бэкенд без `after` / пост глубже первой крупной страницы):
+        // подтягиваем крупную страницу и показываем пост прямо из неё.
+        const fallbackFetch = async () => {
+          const resp = await api.get(`/topics/${id}/posts`, {
+            params: { page: 1, limit: POST_LOCATE_LIMIT },
+          });
+          setPosts(resp.data.results);
+          setCount(resp.data.count);
+          setLimit(resp.data.limit);
+          return (resp.data.results ?? []).some((p) => p.id === postId);
+        };
+        let targetPage = null;
+        let newerCount = null;
+        try {
+          const resp = await api.get(`/topics/${id}/posts`, {
+            params: { after: postId, limit: 1 },
+          });
+          newerCount = Number.parseInt(resp.data?.count, 10);
+          if (!Number.isNaN(newerCount)) {
+            targetPage = Math.floor(newerCount / 20) + 1;
+          }
+        } catch {
+          /* старый бэкенд не знает про after — используем фолбэк ниже */
+        }
+        if (targetPage !== null) {
+          const params = { page: String(targetPage) };
+          if (search) params.search = search;
+          setSearchParams(params, { replace: true });
+          window.scrollTo({ top: 0 });
+          return true;
+        }
+        return await fallbackFetch();
+      } catch (err) {
+        setError(errorMessage(err));
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [id, search, setSearchParams],
+  );
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -68,19 +132,71 @@ export default function TopicPage() {
     loadPosts();
   }, [loadPosts]);
 
+  // Обработка ?post= при заходе в тему: находим страницу поста и переходим на
+  // неё (параметр убирается из URL, чтобы повторные render-циклы не зациклили
+  // запросы). Если пост пришёл во время просмотра этой же темы (переход по
+  // тосту без remount-а компонента) — внеочередной locate через ref.
+  useEffect(() => {
+    if (!targetPostId) return undefined;
+    let cancelled = false;
+    (async () => {
+      const found = await locatePost(targetPostId);
+      if (cancelled) return;
+      if (found) {
+        setHighlightedPostId(targetPostId);
+        // убираем только ?post=, сохраняя ?page= и ?search=
+        setSearchParams(
+          (prev) => {
+            const params = new URLSearchParams(prev);
+            params.delete('post');
+            return params;
+          },
+          { replace: true },
+        );
+      } else {
+        const params = {};
+        if (search) params.search = search;
+        setSearchParams(params, { replace: true });
+        setError('Сообщение из уведомления не найдено — возможно, оно было удалено');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetPostId, id]);
+
+  // подсветка целевого поста: автоскролл к нему и снятие подсветки через 3 с
+  useEffect(() => {
+    if (!highlightedPostId) return undefined;
+    const el = document.getElementById(`post-${highlightedPostId}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const t = setTimeout(() => setHighlightedPostId(null), 3000);
+    return () => clearTimeout(t);
+  }, [highlightedPostId, posts]);
+
   // Поиск в реальном времени: debounce 400 мс — запрос к API без нажатия «Найти»
   useEffect(() => {
     const t = setTimeout(() => {
       const current = searchParams.get('search') || '';
       const wanted = inputValue.trim();
       if (wanted !== current) {
-        const params = {};
-        if (wanted) params.search = wanted;
-        setSearchParams(params, { replace: true });
+        // сохраняем остальные параметры (?page=, ?post=), иначе debounce-запись
+        // затирает URL и сбивает навигацию/пагинацию
+        setSearchParams(
+          (prev) => {
+            const params = new URLSearchParams(prev);
+            if (wanted) params.set('search', wanted);
+            else params.delete('search');
+            return params;
+          },
+          { replace: true },
+        );
       }
     }, 400);
     return () => clearTimeout(t);
-  }, [inputValue]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputValue]);
 
   const profanityWarning = containsProfanity(newText);
 
@@ -106,8 +222,15 @@ export default function TopicPage() {
       setNewText('');
       // Новые сообщения сверху: после отправки показываем первую страницу,
       // где только что написанное сообщение будет в самом верху.
-      loadPosts();
-      if (page !== 1) changePage(1);
+      // Раньше здесь был лишний loadPosts() + changePage(1) — двойная загрузка.
+      // Теперь: если мы уже на первой странице (без поиска) — обновляем её один
+      // раз; иначе просто меняем страницу в URL, а подгрузку сделает эффект
+      // [loadPosts] ровно одним запросом.
+      if (page === 1 && !search) {
+        loadPosts();
+      } else {
+        changePage(1);
+      }
     } catch (err) {
       const errs = extractErrors(err);
       setPostError(errs.text || errs.detail || 'Не удалось отправить сообщение');
@@ -242,7 +365,13 @@ export default function TopicPage() {
           ) : (
             <div className="mb-3">
               {posts.map((p) => (
-                <div key={p.id} className="card post-card shadow-sm mb-2">
+                <div
+                  key={p.id}
+                  id={`post-${p.id}`}
+                  className={`card post-card shadow-sm mb-2${
+                    p.id === highlightedPostId ? ' post-highlight' : ''
+                  }`}
+                >
                   <div className="card-body py-2 d-flex gap-3 align-items-center">
                     <span className="post-avatar">{p.owner.username.charAt(0).toUpperCase()}</span>
                     <div className="flex-grow-1 min-w-0">

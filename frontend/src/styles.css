@@ -130,6 +130,16 @@ body {
   border-left: 4px solid var(--brand);
 }
 
+/* Подсветка поста, к которому «перелетели» по ссылке из уведомления */
+.post-card.post-highlight {
+  animation: post-highlight-fade 3s ease-out forwards;
+}
+
+@keyframes post-highlight-fade {
+  0%, 60% { background-color: #fff8dd; }
+  100% { background-color: transparent; }
+}
+
 .post-avatar {
   display: inline-flex;
   align-items: center;
