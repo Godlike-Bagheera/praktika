@@ -1,238 +1,346 @@
-# Форум (Web-приложение «Форум»)
+# Форум-проект (Praktika)
 
-Полноценное веб-приложение форума: backend на **Django 5 + Django REST Framework** (PostgreSQL 16, JWT-аутентификация SimpleJWT, экспорт в Excel через openpyxl), frontend на **React 18 + Vite + Bootstrap**, развёрнутые через **Docker Compose** (три контейнера: `db`, `app`, `nginx`). Наружу открыт только порт **8084**.
+Краткое описание: учебный форум на Django + React с Docker-развёртыванием, JWT-авторизацией в httpOnly куках, системой жалоб с уведомлениями для админа, статистикой, тёмной темой и CI/CD через GitHub Actions.
 
-## Возможности
+## Содержание
+- [Требования](#требования)
+- [Шаг 1. Установка Ubuntu Server на VirtualBox](#шаг-1-установка-ubuntu-server-на-virtualbox)
+  - [Настройка виртуальной машины](#настройка-виртуальной-машины)
+  - [Установка системы](#установка-системы)
+  - [Экран Profile configuration](#экран-profile-configuration)
+- [Шаг 2. Настройка проброса портов](#шаг-2-настройка-проброса-портов)
+- [Шаг 3. Подключение по SSH](#шаг-3-подключение-по-ssh)
+  - [С Windows (PowerShell)](#с-windows-powershell)
+  - [С Linux / macOS](#с-linux--macos)
+  - [Альтернатива: сетевой мост](#альтернатива-сетевой-мост)
+- [Шаг 4. Установка Docker и SSH-сервера](#шаг-4-установка-docker-и-ssh-сервера)
+- [Шаг 5. Скачивание и запуск проекта](#шаг-5-скачивание-и-запуск-проекта)
+- [Шаг 6. Наполнение базы демо-данными](#шаг-6-наполнение-базы-демо-данными)
+- [Шаг 7. Открытие сайта в браузере](#шаг-7-открытие-сайта-в-браузере)
+- [Данные для входа](#данные-для-входа)
+- [Запуск тестов](#запуск-тестов)
+- [Полезные команды](#полезные-команды)
+- [Решение типичных проблем](#решение-типичных-проблем)
 
-- Регистрация, вход (JWT access+refresh, срок жизни access-токена — 24 часа), logout с blacklist refresh-токена.
-- Роли: гость (только /register и /login), пользователь, администратор.
-- Категории (создаёт/редактирует/удаляет только админ), темы (пользователь создаёт, редактирует только свои; админ может удалять любые), сообщения (пагинация по 20, редактирование — только владельцем, удаление — владельцем или админом).
-- Поиск по заголовкам тем и тексту сообщений, фильтр по категории, сортировка: темы — новые сверху; в теме сообщения — новые сверху (последние ответы в начале, `order_by("-created_at", "-id")`).
-- Экспорт сообщений в `.xlsx`: жирная закреплённая строка заголовков, автофильтр, даты ДД.ММ.ГГГГ, защита от инъекций формул (префикс `'`), лимит 10 000 строк; пользователь экспортирует только свои сообщения, админ — все.
-- Ограничение попыток входа: не более 10 в минуту с одного IP (429).
-- Валидация на клиенте и сервере, ошибки в формате `{"errors": {"поле": "сообщение"}}`.
-- Healthcheck: `GET /health` → 200 без авторизации.
+## Требования
 
-## Структура репозитория
+- VirtualBox 7+ (https://www.virtualbox.org/)
+- ISO Ubuntu Server 24.04 LTS или 26.04 LTS (https://ubuntu.com/download/server)
+- Минимум 2 GB RAM и 2 CPU для виртуальной машины
+- 15 GB свободного места на диске
+- Git, SSH-клиент (PowerShell на Windows, терминал на Linux/macOS)
 
+## Шаг 1. Установка Ubuntu Server на VirtualBox
+
+### Настройка виртуальной машины
+
+1. Открой VirtualBox, нажми **Создать**
+2. Имя: `ubuntu-server`, Тип: `Linux`, Версия: `Ubuntu (64-bit)`
+3. Оперативная память: **2048 MB** (можно больше)
+4. Жёсткий диск: **Создать новый виртуальный жёсткий диск**, VDI, динамический, **15 GB**
+5. После создания ВМ нажми **Настроить**:
+   - **Система → Процессор**: выдели 2 CPU
+   - **Сеть → Сеть 1**: Тип подключения **NAT**
+   - **Сеть → Дополнительно → Проброс портов** → добавь 2 правила (зелёный плюс):
+     * Имя: `ssh`, Протокол: `TCP`, IP хоста: `127.0.0.1`, Порт хоста: `2222`, Порт гостя: `22`
+     * Имя: `forum`, Протокол: `TCP`, IP хоста: `127.0.0.1`, Порт хоста: `8084`, Порт гостя: `8084`
+   - **Носители**: в контроллер IDE добавь скачанный ISO Ubuntu Server
+
+### Установка системы
+
+1. Запусти ВМ — начнётся установка Ubuntu
+2. Выбери язык (English или Русский — как удобнее)
+3. Раскладка клавиатуры: Russian или English
+4. Тип установки: **Ubuntu Server** (без графического интерфейса)
+5. Сетевые настройки: оставь по умолчанию (DHCP)
+6. Прокси: оставь пустым
+7. Зеркало архива: оставь по умолчанию
+8. Разметка диска: **Use entire disk** → Continue → Continue
+
+### Экран Profile configuration
+
+После разметки диска появится экран **Profile configuration** с пятью полями. Заполни их так:
+
+- **Ваше имя** (Your name): введи своё имя, например `Student` или любое другое. Это полное имя пользователя, оно не критично.
+- **Your server's name** (имя сервера): введи `ubuntu-server` или любое имя без пробелов. Это hostname машины, используется в командной строке как `user@ubuntu-server`.
+- **Введите имя пользователя** (Username): введи `ubuntu` (строчными буквами, без пробелов и спецсимволов). Это будет логин для входа в систему и для SSH-подключения.
+- **Задайте пароль** (Choose a password): введи надёжный пароль, например `ubuntu12345`. Пароль должен быть минимум 8 символов.
+- **Подтвердите пароль** (Confirm your password): введи тот же пароль ещё раз.
+
+После заполнения всех пяти полей нажми **Tab** чтобы перейти к кнопке **Готово** (Done), и нажми **Enter**.
+
+Важно: запомни имя пользователя и пароль — они понадобятся для SSH-подключения. Если забудешь пароль, его можно сбросить через Recovery Mode (см. раздел "Решение типичных проблем").
+
+Дальше установщик предложит настроить SSH Server — обязательно выбери **Install OpenSSH server** (пробелом отметь пункт и нажми Tab → Done). Это позволит подключаться к виртуалке по SSH с хост-машины.
+
+Остальные шаги (Featured Server Snaps) можно пропустить — нажми Done.
+
+После завершения установки нажми **Reboot Now**. При запросе "Please remove the installation medium" просто нажми Enter.
+
+## Шаг 2. Настройка проброса портов
+
+Если ты настраивал проброс портов при создании ВМ (Шаг 1), этот шаг можно пропустить.
+
+Для проверки открой PowerShell на Windows и выполни:
+```powershell
+VBoxManage list vms
 ```
-/
-├── backend/          # Django + DRF (Dockerfile, requirements.txt)
-├── frontend/         # React + Vite (Dockerfile, nginx.conf)
-├── docker-compose.yml
-├── .env.example
-└── README.md
+Найди имя своей ВМ в кавычках (например `"ubuntu-server"`). Если проброс не настроен, выполни:
+```powershell
+VBoxManage modifyvm "ubuntu-server" --natpf1 "ssh,tcp,,2222,,22"
+VBoxManage modifyvm "ubuntu-server" --natpf1 "forum,tcp,,8084,,8084"
+```
+ВМ должна быть выключена при выполнении этих команд.
+
+## Шаг 3. Подключение по SSH
+
+### С Windows (PowerShell)
+
+1. Запусти виртуальную машину в VirtualBox
+2. Дождись появления приглашения входа в Ubuntu
+3. Открой PowerShell на Windows (Win+R → powershell → Enter)
+4. Выполни команду:
+```powershell
+ssh -p 2222 ubuntu@127.0.0.1
+```
+5. При первом подключении напиши `yes` и нажми Enter
+6. Введи пароль, который задавал на экране Profile configuration (символы при вводе не отображаются — это нормально)
+
+Для удобства можно создать файл `C:\Users\<ТвоёИмя>\.ssh\config` с содержимым:
+```
+Host ubuntu
+    HostName 127.0.0.1
+    User ubuntu
+    Port 2222
+```
+После этого подключение будет одной командой:
+```powershell
+ssh ubuntu
 ```
 
-## Локальный запуск (Docker Compose)
+### С Linux / macOS
 
-Требуются Docker и Docker Compose.
+Открой терминал и выполни:
+```bash
+ssh -p 2222 ubuntu@127.0.0.1
+```
+Или добавь в `~/.ssh/config`:
+```
+Host ubuntu
+    HostName 127.0.0.1
+    User ubuntu
+    Port 2222
+```
+
+### Альтернатива: сетевой мост
+
+Если NAT не работает, можно использовать сетевой мост:
+1. В VirtualBox: Настройки ВМ → Сеть → Сеть 1 → Тип подключения: **Сетевой мост (Bridged Adapter)**
+2. Запусти ВМ, войди в систему
+3. Узнай IP виртуалки:
+```bash
+ip a
+```
+Ищи строку вида `inet 192.168.1.45/24` — это и есть IP.
+4. Подключись с хост-машины:
+```bash
+ssh ubuntu@192.168.1.45
+```
+(замени IP на свой)
+
+## Шаг 4. Установка Docker и SSH-сервера
+
+После подключения по SSH выполни команды по одной, дожидаясь завершения каждой:
 
 ```bash
-cp .env.example .env
-# отредактируйте .env: DJANGO_SECRET_KEY, DB_PASSWORD, DJANGO_ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS
-
-docker compose up -d --build
-
-# создание тестовых данных (админ, пользователь, категории, темы, сообщения):
-# если не запускать seed_demo, категорий не будет — сайт покажет «Пока нет категорий»;
-# категории после этого создаёт администратор вручную на главной странице
-docker compose exec app python manage.py seed_demo
-
-# массовое наполнение форума "живым" контентом (10 категорий, 45 тем, ~320 сообщений,
-# 15 пользователей; два треда длиннее 20 сообщений — для проверки пагинации).
-# Команда идемпотентна: существующие объекты не дублируются, админу обновляет роль/пароль.
-docker compose exec app python manage.py fill_forum \
-    --admin-email admin@gmail.com --admin-username admin --admin-password admin
-```
-
-Приложение доступно: **http://localhost:8084** (или http://IP_сервера:8084). Django-админка: http://IP:8084/admin/ (через прокси nginx путь `/admin` не проброшен — используйте API; при локальной отладке backend — :8000).
-
-### Тестовые учётные данные (после `seed_demo`)
-
-| Роль | Email | Пароль |
-|------|-------|--------|
-| Администратор | `admin@example.com` | `Admin12345` |
-| Пользователь | `user@example.com` | `Demo12345` |
-
-После `fill_forum` также доступен администратор с указанными вами параметрами
-(по умолчанию `admin@gmail.com` / пароль `admin`), а также 15 демо-пользователей
-(`coder_42@example.com` и т.д., пароль `Demo12345`).
-
-Смену пароля администратора выполните сразу после первого входа.
-
-## Деплой на Ubuntu Server 22.04/24.04 LTS
-
-Требования к серверу: 2 vCPU, 2 ГБ RAM, 20 ГБ диска, сеть Bridge; открыты порты 22, 80, 443, 8084/tcp (порт 5432 наружу не открывать).
-
-```bash
-# 1. Установить Docker и Docker Comose plugin
-sudo apt update && sudo apt install -y docker.io docker-compose-v2
+sudo apt update
+sudo apt install -y docker.io docker-compose-v2
 sudo systemctl enable --now docker
-sudo usermod -aG docker $USER && newgrp docker
-
-# 2. Клонировать репозиторий
-git clone <URL_репозитория> forum && cd forum
-
-# 3. Настроить окружение
-cp .env.example .env
-nano .env   # DJANGO_SECRET_KEY (openssl rand -hex 32), DB_PASSWORD,
-            # DJANGO_ALLOWED_HOSTS=localhost,<IP_VM>,
-            # CSRF_TRUSTED_ORIGINS=http://<IP_VM>:8084
-
-# 4. Запуск
-sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw allow 8084/tcp
-docker compose up -d --build
-# если не запускать seed_demo, категорий не будет — сайт покажет «Пока нет категорий»;
-# категории после этого создаёт администратор вручную на главной странице
-docker compose exec app python manage.py seed_demo
-
-# 5. Проверка
-curl http://localhost:8084/health   # → 200
-docker compose ps                    # три сервиса в состоянии running/healthy
+sudo usermod -aG docker $USER
 ```
 
-Данные сохраняются в volume `pgdata` — `docker compose restart` и перезагрузка VM не теряют пользователей, категории, темы и сообщения.
+Важно: после выполнения команды `usermod` выйди из SSH командой `exit` и подключись заново, чтобы применились права группы docker.
 
-
-## Перенос проекта на новый компьютер (автоматически)
-
-**Сохранение всего (на текущем сервере, внутри ВМ):**
+Проверь установку:
 ```bash
-cd praktika && git pull
-bash scripts/one_command.sh <пароль_docker_hub>
-```
-Скрипт сам: проверит контейнеры, сделает SQL-дамп базы + .env в архив
-`forum_backup_<дата>.tar.gz`, соберёт и запушит образы app/nginx на Docker Hub
-(testbagheera666/forum-app, testbagheera666/forum-nginx), положит инструкцию
-восстановления внутрь архива.
-
-Для ПОЛНОЙ копии всей виртуальной машины (ОС + Docker + данные 1-в-1):
-выключи ВМ и на Windows выполни:
-```powershell
-VBoxManage export "<Имя_ВМ>" --output forum_full.ova
-```
-(имя смотри через `VBoxManage list vms`). На новом ПК: VirtualBox → File → Import Appliance.
-
-**Развёртывание на НОВОМ компьютере (нужна только Ubuntu/Linux с git):**
-```bash
-git clone https://github.com/Godlike-Bagheera/praktika && cd praktika
-bash scripts/deploy_new_pc.sh /путь/к/forum_backup_<дата>.tar.gz
-```
-Скрипт сам установит Docker, восстановит .env и базу из дампа, подставит новый IP
-в ALLOWED_HOSTS/CSRF, запустит контейнеры, проверит /health и выведет адрес сайта.
-Без аргумента — чистый запуск с автоматическим демо-наполнением.
-Флаг `--hub` — использовать готовые образы с Docker Hub без сборки.
-
-Последний ручной шаг (только при NAT VirtualBox, на Windows-хосте):
-```powershell
-VBoxManage controlvm "<Имя_ВМ>" natpf1 "forum,tcp,,8084,,8084"
+docker --version
+docker compose version
 ```
 
-## Скриншоты основных экранов
-
-> Скриншоты делаются после развёртывания (файлы в `docs/screenshots/`):
-> 1. `01_login.png` — страница входа
-> 2. `02_home.png` — список категорий (админ видит кнопку «Создать категорию»)
-> 3. `03_category.png` — темы категории с поиском и пагинацией
-> 4. `04_topic.png` — карточка темы, сообщения, кнопка «Скачать Excel»
-> 5. `05_register.png` — регистрация с ошибками валидации под полями
-
-## Разработка без Docker
+## Шаг 5. Скачивание и запуск проекта
 
 ```bash
-# Backend
-cd backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-export DB_HOST=localhost DB_NAME=forumdb DB_USER=forumuser DB_PASSWORD=pass DJANGO_SECRET_KEY=dev
-python manage.py migrate && python manage.py seed_demo
-python manage.py runserver 8000
-
-# Frontend
-cd frontend
-npm install
-npm run dev    # http://localhost:5173, прокси /api → :8000
-```
-
-## API (кратко)
-
-| Метод | Путь | Доступ |
-|-------|------|--------|
-| POST | /api/auth/register | гость |
-| POST | /api/auth/login | гость |
-| POST | /api/auth/logout | пользователь |
-| GET | /api/auth/me | пользователь |
-| GET | /api/categories | пользователь |
-| POST/PUT/DELETE | /api/categories[/:id] | админ |
-| GET/POST | /api/topics (category, search, page, limit) | пользователь |
-| GET/PUT/DELETE | /api/topics/:id | пользователь (PUT — владелец, DELETE — владелец/админ) |
-| GET/POST | /api/topics/:id/posts (page, limit) | пользователь |
-| PUT/DELETE | /api/posts/:id | владелец (DELETE — также админ) |
-| GET | /api/posts/export/?topic=&search= | пользователь (свои)/админ (все) |
-| GET | /health | все |
-
-## Резервное копирование и перенос проекта
-
-### Сохранить всё (на сервере):
-```bash
-bash scripts/backup.sh
-```
-Получите архив `forum_backup_<дата>.tar.gz` — внутри дамп всей базы (пользователи, категории, темы, сообщения), файл `.env` и хеш коммита кода. Скачайте его на свой компьютер (WinSCP/scp, порт 2222).
-
-### Восстановить на новом компьютере (Linux / Ubuntu ВМ):
-```bash
+# Клонируем репозиторий
 git clone https://github.com/Godlike-Bagheera/praktika.git
 cd praktika
-# положи рядом архив бэкапа
-bash scripts/setup.sh forum_backup_<дата>.tar.gz
+
+# Создаём .env из шаблона
+cp .env.example .env
+
+# Генерируем секретный ключ и заполняем .env для локальной разработки
+NEW_KEY=$(openssl rand -hex 32)
+sed -i "s/DJANGO_SECRET_KEY=.*/DJANGO_SECRET_KEY=$NEW_KEY/" .env
+sed -i "s/DJANGO_DEBUG=.*/DJANGO_DEBUG=1/" .env
+sed -i "s/DJANGO_SECURE_COOKIES=.*/DJANGO_SECURE_COOKIES=0/" .env
+sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=localpass123/" .env
+
+# Проверяем что .env заполнен
+cat .env | grep -E "SECRET_KEY|DEBUG|SECURE_COOKIES|DB_PASSWORD"
+
+# Запускаем контейнеры (первый раз сборка займёт 2-3 минуты)
+docker compose up -d --build
+
+# Применяем миграции
+docker compose exec app python manage.py migrate
 ```
-Скрипт сам установит Docker, создаст .env, соберёт контейнеры, восстановит базу из дампа и проверит /health. Без аргумента поднимет чистый проект и наполнит демо-контентом.
 
-### Windows-хост (VirtualBox NAT):
-```bat
-scripts\setup.bat
-```
-Запустит ВМ, пробросит порт 8084 и подскажет команды восстановления внутри ВМ.
+## Шаг 6. Наполнение базы демо-данными
 
-### Полный клон ВМ (альтернатива):
-Выключить ВМ → VirtualBox меню «Экспорт конфигурации виртуальной машины» (.ova) → на новом ПК «Импорт конфигурации». Внутри OVA будет вся ОС со всеми настройками вместе с проектом.
-
-### Публикация образов на Docker Hub (запуск без сборки):
 ```bash
-docker compose build                                   # собрать образы app и nginx
-docker login -u testbagheera666                        # пароль с https://hub.docker.com
-bash scripts/push_images.sh testbagheera666            # пуш forum-app и forum-nginx
+docker compose exec app python manage.py fill_forum --admin-email admin@gmail.com --admin-username admin --admin-password admin
 ```
-На любом новом ПК после этого проект поднимается за секунды, без npm/pip-сборки:
+
+Команда создаст:
+- 10 категорий форума
+- Около 45 тем с осмысленными названиями
+- Около 320 сообщений от 15 демо-пользователей
+- Администратора admin@gmail.com / admin
+
+## Шаг 7. Открытие сайта в браузере
+
+- Если использовал проброс портов (NAT): открой в браузере на Windows/Linux **http://localhost:8084**
+- Если использовал сетевой мост: **http://<IP_виртуалки>:8084**
+
+Нажми **Ctrl+F5** для жёсткой перезагрузки (сброс кэша браузера).
+
+## Данные для входа
+
+Администратор:
+- Email: `admin@gmail.com`
+- Пароль: `admin`
+
+Демо-пользователи (создаются скриптом fill_forum):
+- `alpha_tester`, `beta_user`, `gamma_dev` и другие
+- Пароль у всех: `Test12345`
+
+## Запуск тестов
+
 ```bash
-git clone https://github.com/Godlike-Bagheera/praktika.git
-cd praktika && cp .env.example .env                    # заполнить DB_PASSWORD
-docker compose -f docker-compose.hub.yml up -d         # образы тянутся с Docker Hub
-bash scripts/setup.sh forum_backup_<дата>.tar.gz       # восстановить базу из дампа (опционально)
+docker compose exec app python manage.py test
 ```
 
-### Важно про секреты
-Никогда не коммить `.env` и не публикуй пароли в публичных репозиториях/образах. Для приватных образов используй `docker push` в приватный репозиторий Docker Hub и `docker login` перед запуском.
+Ожидаемый результат: `Ran 47 tests in XX.XXs` — все тесты проходят (OK). В режиме DEBUG=1 один тест про secure cookies может выдавать предупреждение — это нормально для локальной разработки.
 
-## Code review fixes (2026-10-29)
+## Полезные команды
 
-Пакет правок по результатам code review (ветка `fix/code-review-batch`):
+```bash
+# Посмотреть статус контейнеров
+docker compose ps
 
-1. **Уведомления при редактировании поста** (`PostDetailView.put`): перед сохранением
-   запоминаются старые `UserMention`, после сохранения `notify_mentions()` возвращает
-   актуальный set упомянутых; уведомления за убранные упоминания удаляются, дубли при
-   повторном упоминании не создаются. Покрыто тестами (`test_edit_post_*`).
-2. **Сортировка в README приведена к коду**: сообщения в теме — новые сверху
-   (`order_by("-created_at", "-id")`), как и реализовано в `TopicPostsListView`.
-3. **Поиск тем оптимизирован** (`_build_search_q_topic`): вместо N correlated
-   EXISTS-подзапросов на строку — один проход по таблице posts для первого слова +
-   некоррелированные IN-проверки остальных слов по candidate-темам; добавлена
-   короткая ветка для одного слова. Семантика (все слова в сообщениях одной темы)
-   сохранена.
-4. **CI (GitHub Actions)**: `.github/workflows/test.yml` — pytest на PostgreSQL 16
-   service-контейнере + сборка фронтенда на push/PR в main.
-5. **CORS в production**: `CORS_ALLOW_ALL_ORIGINS` жёстко `False` при `DEBUG=False`;
-   если в проде выставлен `CORS_ALLOW_ALL=true` — предупреждение в лог при старте
-   (сервер не падает); whitelist задаётся через `CORS_ALLOWED_ORIGINS`
-   (пример в `.env.example`).
+# Посмотреть логи приложения
+docker compose logs -f app
+
+# Посмотреть логи nginx
+docker compose logs -f nginx
+
+# Перезапустить контейнеры
+docker compose restart
+
+# Полностью остановить и удалить базу данных
+docker compose down -v
+
+# Зайти в контейнер приложения
+docker compose exec app bash
+
+# Зайти в PostgreSQL
+docker compose exec db psql -U forumuser -d forumdb
+
+# Обновить код и пересобрать
+cd ~/praktika
+git pull
+docker compose up -d --build
+
+# Применить новые миграции
+docker compose exec app python manage.py migrate
+
+# Выйти из SSH
+exit
+```
+
+## Решение типичных проблем
+
+### Ошибка "Connection refused" при SSH
+- Убедись что виртуальная машина запущена
+- Проверь проброс портов: VirtualBox → Настройки ВМ → Сеть → Дополнительно → Проброс портов. Должны быть правила для портов 2222→22 и 8084→8084
+- Проверь что ssh-сервер запущен на Ubuntu:
+```bash
+sudo systemctl status ssh
+```
+Если не запущен:
+```bash
+sudo apt install -y openssh-server
+sudo systemctl enable --now ssh
+```
+
+### Ошибка "Permission denied" при docker compose
+Выйди из SSH командой `exit` и подключись заново. Права группы docker применяются только после перелогина.
+
+### Ошибка "env file .env not found"
+```bash
+cd ~/praktika
+cp .env.example .env
+```
+Заполни обязательные поля в .env: DJANGO_SECRET_KEY, DB_PASSWORD.
+
+### Ошибка миграций "relation already exists" или "column already exists"
+Полностью удали базу и создай заново:
+```bash
+docker compose down -v
+docker volume rm praktika_pgdata 2>/dev/null || true
+docker compose up -d
+sleep 10
+docker compose exec app python manage.py migrate
+docker compose exec app python manage.py fill_forum --admin-email admin@gmail.com --admin-username admin --admin-password admin
+```
+
+### Сайт не открывается в браузере
+- Проверь что контейнеры запущены: `docker compose ps`
+- Проверь логи nginx: `docker compose logs nginx`
+- Убедись что порт 8084 проброшен в VirtualBox
+- Нажми Ctrl+F5 в браузере
+
+### Забыл пароль от Ubuntu
+1. Перезагрузи ВМ. Сразу после появления логотипа VirtualBox многократно нажимай **Shift** (или **Esc**) чтобы попасть в меню GRUB
+2. Выбери **Advanced options for Ubuntu** → строку с **(recovery mode)** → Enter
+3. В меню восстановления выбери **root — Drop to root shell prompt** → Enter
+4. Нажми Enter для активации командной строки
+5. Выполни:
+```bash
+mount -o remount,rw /
+passwd ubuntu
+```
+6. Введи новый пароль дважды (символы не отображаются)
+7. Перезагрузи:
+```bash
+reboot
+```
+
+### Экран Profile configuration — что вводить
+Если ты на этапе установки Ubuntu и не знаешь что вводить в поля:
+- **Ваше имя**: любое, например `Student`
+- **Your server's name**: `ubuntu-server` (без пробелов)
+- **Введите имя пользователя**: `ubuntu` (строчными, без пробелов — это будет логин для SSH)
+- **Задайте пароль**: придумай пароль минимум 8 символов, например `ubuntu12345`
+- **Подтвердите пароль**: тот же пароль ещё раз
+После заполнения нажми Tab до кнопки **Готово** и Enter.
+
+## Технологии
+
+- **Backend**: Python 3.12, Django 5, Django REST Framework, PostgreSQL 16, SimpleJWT
+- **Frontend**: React 18, Vite, Bootstrap 5.3, React Router
+- **DevOps**: Docker, Docker Compose, GitHub Actions (CI), Nginx
+- **Безопасность**: JWT в httpOnly куках, rate limiting, защита SECRET_KEY, secure cookies, CSRF-защита, система жалоб с премодерацией
+
+## Лицензия
+
+Учебный проект для практики.
