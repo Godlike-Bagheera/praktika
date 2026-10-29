@@ -75,20 +75,32 @@ export function NotificationsProvider({ children }) {
     try {
       const [{ data: countData }, { data: recent }] = await Promise.all([
         api.get('/notifications/count'),
-        api.get('/notifications', { params: { unread: 1, limit: 5 } }),
+        api.get('/notifications', { params: { unread: 1, limit: 10 } }),
       ]);
       setUnread(countData.count ?? 0);
 
       const items = recent.results ?? recent ?? [];
-      // При первом опросе ничего не всплываем — показываем только совсем
-      // свежие уведомления, иначе после перезагрузки вывалится пачка старых.
+      // При первом опросе помечаем всё уже существующее как «увиденное»,
+      // но НЕ скрываем свежие упоминания: всплываем только то, что создано
+      // за последние ~20 секунд (между двумя интервалами опроса). Так новые
+      // упоминания показываются тостом почти мгновенно, а старые — никогда.
+      const FRESH_WINDOW_MS = (NOTIF_POLL_MS * 2) * 1000; // запас от джиттера часов
+      const nowMs = Date.now();
+      const isFresh = (it) => {
+        const t = new Date(it.created_at).getTime();
+        return Number.isFinite(t) && nowMs - t <= FRESH_WINDOW_MS;
+      };
       if (!initializedRef.current) {
+        const toShow = items.filter((it) => !seenIdsRef.current.has(it.id) && isFresh(it));
         items.forEach((it) => seenIdsRef.current.add(it.id));
         initializedRef.current = true;
+        if (toShow.length) {
+          setToasts((list) => [...toShow.map((it) => ({ ...it, me: user.username })), ...list].slice(0, 4));
+        }
         return;
       }
-      const fresh = items.filter((it) => !seenIdsRef.current.has(it.id));
-      fresh.forEach((it) => seenIdsRef.current.add(it.id));
+      const fresh = items.filter((it) => !seenIdsRef.current.has(it.id) && isFresh(it));
+      items.forEach((it) => seenIdsRef.current.add(it.id));
       if (fresh.length) {
         setToasts((list) => [...fresh.map((it) => ({ ...it, me: user.username })), ...list].slice(0, 4));
       }
