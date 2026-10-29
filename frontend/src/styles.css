@@ -344,24 +344,12 @@ pre-wrap {
 .profile-menu-item.is-danger { color: #c0392b; }
 .profile-menu-item.is-danger:hover { background: #fdeceb; }
 
-/* Кнопка «На главную» на странице статистики — в фирменном градиенте сайта */
-.btn-ghost {
-  display: inline-flex; align-items: center; gap: .45rem;
-  border: 0; border-radius: 999px; padding: .5rem 1.1rem;
-  font-size: .9rem; font-weight: 600; text-decoration: none;
-  color: #fff; background: linear-gradient(135deg, var(--brand), #7c3aed);
-  box-shadow: 0 6px 16px rgba(79, 70, 229, .28);
-  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
-}
-.btn-ghost:hover,
-.btn-ghost:focus {
-  color: #fff; text-decoration: none; filter: brightness(1.06);
-  transform: translateY(-1px); box-shadow: 0 8px 20px rgba(79, 70, 229, .34);
-}
-.btn-ghost .btn-ghost-arrow { font-size: 1.05rem; line-height: 1; }
-
 /* ===== Страница статистики ===== */
 .forum-page-title { font-weight: 700; }
+
+/* Спиннер загрузки занимает высоту, близкую к контенту, чтобы страница
+   не «прыгала» при переходе «загрузка → данные» */
+.stats-loading { min-height: 420px; }
 .stats-tile {
   background: #fff; border-radius: 16px; padding: 1rem 1.2rem;
   box-shadow: 0 6px 18px rgba(16, 24, 40, .06); text-align: center;

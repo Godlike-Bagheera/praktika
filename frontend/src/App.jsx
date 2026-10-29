@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 import { AuthProvider, useAuth } from './AuthContext';
@@ -51,6 +52,17 @@ function AdminRoute() {
   return <Outlet />;
 }
 
+// Сброс прокрутки при смене маршрута: SPA по умолчанию сохраняет позицию
+// скролла между страницами — из-за этого переход «статистика (длинная) →
+// главная» начинался не сверху и выглядел как дёрганье/лаг.
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 function AppRoutes() {
   // Токены теперь в httpOnly-куках — JS их не читает; статус сессии
   // определяет AuthProvider через запрос /auth/me (состояние booting).
@@ -91,6 +103,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>

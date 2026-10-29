@@ -57,20 +57,39 @@ function ActivityChart({ activity }) {
   );
 }
 
+// Модульный кэш статистики: повторный визит на страницу рендерится
+// мгновенно (без цикла «спиннер → данные»), переходы не дёргаются.
+let cachedStats = null;
+let cachedError = '';
+
 export default function StatsPage() {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
+  // Данные кэшируются в модульной переменной: при повторном визите
+  // страница рендерится сразу, без спиннера — переходы не «дёргаются».
+  const [loading, setLoading] = useState(() => cachedStats === null);
 
   useEffect(() => {
+    if (cachedStats !== null) {
+      setStats(cachedStats);
+      setError(cachedError);
+      setLoading(false);
+      return undefined;
+    }
     let alive = true;
     api
       .get('/stats')
       .then((r) => {
-        if (alive) setStats(r.data);
+        cachedStats = r.data;
+        cachedError = '';
+        if (alive) {
+          setStats(r.data);
+          setError('');
+        }
       })
       .catch((e) => {
-        if (alive) setError(errorMessage(e));
+        cachedError = errorMessage(e);
+        if (alive) setError(cachedError);
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -80,9 +99,11 @@ export default function StatsPage() {
     };
   }, []);
 
+  // Спиннер занимаем ту же высоту, что и контент, чтобы при смене
+  // «загрузка → данные» высота страницы не прыгала.
   if (loading) {
     return (
-      <div className="d-flex justify-content-center py-5">
+      <div className="d-flex justify-content-center align-items-center stats-loading">
         <div className="spinner-border text-primary" role="status">
           <span className="visually-hidden">Загрузка...</span>
         </div>
@@ -92,23 +113,23 @@ export default function StatsPage() {
 
   if (error) {
     return (
-      <div className="container py-4">
+      <>
         <div className="alert alert-danger">{error}</div>
-        <Link to="/" className="btn-ghost">
-          <span className="btn-ghost-arrow">←</span> На главную
+        <Link to="/" className="btn btn-primary">
+          ← На главную
         </Link>
-      </div>
+      </>
     );
   }
 
   const totals = stats.totals || {};
 
   return (
-    <div className="container py-4">
+    <>
       <div className="d-flex align-items-center justify-content-between mb-4">
         <h1 className="forum-page-title h3 mb-0">Статистика форума</h1>
-        <Link to="/" className="btn-ghost">
-          <span className="btn-ghost-arrow">←</span> На главную
+        <Link to="/" className="btn btn-primary">
+          ← На главную
         </Link>
       </div>
 
@@ -182,6 +203,6 @@ export default function StatsPage() {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
