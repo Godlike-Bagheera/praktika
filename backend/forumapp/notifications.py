@@ -47,3 +47,32 @@ def notify_mentions(post: Post) -> set:
     if to_create:
         UserMention.objects.bulk_create(to_create)
     return set(mentioned_ids)
+
+
+def notify_admins_about_report(post: Post, reporter) -> int:
+    """Вариант А: уведомить админов о новой жалобе через существующую систему.
+
+    Создаёт UserMention (уведомление-«колокольчик») для каждого администратора
+    на пост, к которому отправлена жалоба. Автор жалобы и автор поста не
+    уведомляются. Уже существующие уведомления пропускаются (идемпотентно).
+    Возвращает количество созданных уведомлений.
+    """
+    User = get_user_model()
+    admin_ids = list(
+        User.objects.filter(role=User.Role.ADMIN)
+        .exclude(pk__in=[post.owner_id, getattr(reporter, "pk", None)])
+        .values_list("pk", flat=True)
+    )
+    if not admin_ids:
+        return 0
+    already = set(
+        UserMention.objects.filter(post=post, user_id__in=admin_ids)
+        .values_list("user_id", flat=True)
+    )
+    to_create = [
+        UserMention(user_id=pk, post=post)
+        for pk in admin_ids if pk not in already
+    ]
+    if to_create:
+        UserMention.objects.bulk_create(to_create)
+    return len(to_create)
