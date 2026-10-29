@@ -922,3 +922,122 @@ body, .card, .form-control, .btn, .navbar {
   background-color: #495057;
   color: #e9ecef;
 }
+
+/* ---------------------------------------------------------------------------
+   Дропдаун жалобы — финальная версия (перебивает старые правила !important)
+--------------------------------------------------------------------------- */
+.report-dropdown {
+  position: absolute !important;
+  top: calc(100% + 4px) !important;
+  left: 0 !important;
+  z-index: 1050 !important;
+  min-width: 220px;
+  background-color: var(--bs-body-bg, #fff) !important;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px 0;
+  overflow: hidden;
+}
+
+[data-bs-theme="dark"] .report-dropdown {
+  background-color: #212529 !important;
+  border-color: #495057;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.report-dropdown-header {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bs-body-color, #212529);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  margin-bottom: 4px;
+  pointer-events: none;
+}
+
+[data-bs-theme="dark"] .report-dropdown-header {
+  color: #e9ecef;
+  border-bottom-color: #495057;
+}
+
+.report-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--bs-body-color, #212529);
+  background: none !important;
+  border: none !important;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.report-dropdown-item:hover {
+  background-color: var(--bs-secondary-bg, #e9ecef) !important;
+}
+
+[data-bs-theme="dark"] .report-dropdown-item {
+  color: #e9ecef;
+}
+
+[data-bs-theme="dark"] .report-dropdown-item:hover {
+  background-color: #495057 !important;
+}
+
+.report-dropdown-divider {
+  height: 1px;
+  background-color: var(--bs-border-color, #dee2e6);
+  margin: 4px 0;
+}
+
+[data-bs-theme="dark"] .report-dropdown-divider {
+  background-color: #495057;
+}
+
+.report-dropdown-cancel {
+  color: #6c757d;
+  font-size: 13px;
+}
+
+.report-dropdown-cancel:hover {
+  background-color: var(--bs-secondary-bg, #e9ecef) !important;
+  color: #212529;
+}
+
+[data-bs-theme="dark"] .report-dropdown-cancel {
+  color: #adb5bd;
+}
+
+[data-bs-theme="dark"] .report-dropdown-cancel:hover {
+  background-color: #495057 !important;
+  color: #e9ecef;
+}
+
+.btn-action-report {
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+  background-color: transparent;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-action-report:hover {
+  color: #fd7e14;
+  border-color: #fd7e14;
+  background-color: rgba(253, 126, 20, 0.1);
+}
+
+[data-bs-theme="dark"] .btn-action-report {
+  color: #adb5bd;
+  border-color: #495057;
+}
+
+[data-bs-theme="dark"] .btn-action-report:hover {
+  color: #fd7e14;
+  border-color: #fd7e14;
+  background-color: rgba(253, 126, 20, 0.15);
+}

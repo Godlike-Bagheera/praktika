@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { api, errorMessage } from '../api';
+import { useState, useRef, useEffect } from 'react';
+import { api } from '../api';
 
 const REASONS = [
   { value: 'spam', label: 'Спам' },
@@ -9,106 +8,81 @@ const REASONS = [
   { value: 'other', label: 'Другое' },
 ];
 
-// Кнопка «Пожаловаться» с выпадающим списком причин (без Bootstrap-модалки:
-// она оставляла .modal-backdrop на весь экран). Список закрывается по клику
-// вне кнопки и по Escape. Не рендерится для собственных постов пользователя.
 export default function ReportButton({ postId, isOwnPost }) {
-  const [open, setOpen] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [done, setDone] = useState(false); // жалоба уже отправлена — дизейблим кнопку
-  const [notice, setNotice] = useState(''); // сообщение об успехе/ошибке
-  const wrapRef = useRef(null);
-  const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const [status, setStatus] = useState('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const dropdownRef = useRef(null);
 
-  // Закрытие по клику вне виджета и по Escape
   useEffect(() => {
-    if (!open) return undefined;
-    const onClick = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    if (!isOpen) return;
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
     };
-    const onKey = (e) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
 
   if (isOwnPost) return null;
+  if (status === 'success') return <span className="text-success small ms-2">Отправлено</span>;
 
-  const submitReason = async (reason) => {
-    if (sending) return;
-    setSending(true);
-    setNotice('');
+  const handleReport = async (reason) => {
+    setStatus('loading');
     try {
-      await api.post(`/posts/${postId}/report/`, { post: postId, reason });
-      setOpen(false);
-      setDone(true);
-      setNotice('Жалоба отправлена');
-      window.dispatchEvent(new Event('forum-reports-refresh'));
+      await api.post('/posts/' + postId + '/report/', { post: postId, reason: reason });
+      setStatus('success');
+      setIsOpen(false);
     } catch (err) {
-      const msg = errorMessage(err) || '';
-      if (/уже жаловались/i.test(msg)) {
-        setNotice('Вы уже отправляли жалобу на это сообщение');
-        setDone(true); // повторная жалоба невозможна — кнопку больше не активим
-      } else if (err?.response?.status === 401) {
-        setOpen(false);
-        navigate('/login');
-      } else {
-        setNotice(msg || 'Не удалось отправить жалобу, попробуйте позже');
-      }
-    } finally {
-      setSending(false);
+      const msg = (err.response && err.response.data && err.response.data.errors && err.response.data.errors.detail) || (err.response && err.response.data && err.response.data.detail) || 'Ошибка';
+      setErrorMsg(msg);
+      setStatus('error');
+      setIsOpen(false);
+      setTimeout(function() { setStatus('idle'); setErrorMsg(''); }, 3000);
     }
   };
 
   return (
-    <div className="report-widget position-relative d-inline-flex flex-column align-items-start" ref={wrapRef}>
+    <div style={{ position: 'relative', display: 'inline-block' }} ref={dropdownRef}>
       <button
-        type="button"
-        className={`btn btn-sm btn-action-report ${done ? 'disabled' : ''}`}
-        onClick={() => {
-          setNotice('');
-          setOpen((v) => !v);
-        }}
-        disabled={done}
-        aria-haspopup="true"
-        aria-expanded={open}
-        title={done ? 'Жалоба уже отправлена' : 'Пожаловаться на сообщение'}
+        className="btn btn-sm btn-action-report"
+        onClick={() => setIsOpen(!isOpen)}
+        disabled={status === 'loading'}
+        title="Пожаловаться на сообщение"
       >
         Пожаловаться
       </button>
 
-      {open && (
-        <div className="report-dropdown" role="menu">
+      {isOpen && (
+        <div
+          className="report-dropdown"
+        >
           <div className="report-dropdown-header">Пожаловаться на сообщение</div>
           {REASONS.map((r) => (
             <button
               key={r.value}
-              type="button"
               className="report-dropdown-item"
-              disabled={sending}
-              onClick={() => submitReason(r.value)}
+              onClick={() => handleReport(r.value)}
+              disabled={status === 'loading'}
             >
               {r.label}
             </button>
           ))}
           <div className="report-dropdown-divider"></div>
           <button
-            type="button"
             className="report-dropdown-item report-dropdown-cancel"
-            onClick={() => setOpen(false)}
+            onClick={() => setIsOpen(false)}
           >
             Отмена
           </button>
         </div>
       )}
 
-      {notice && !open && (
-        <span className="report-notice text-body-secondary">{notice}</span>
+      {status === 'error' && errorMsg && (
+        <div style={{ position: 'absolute', left: 0, top: '100%', marginTop: '4px', zIndex: 1051, whiteSpace: 'nowrap', fontSize: '12px', color: '#dc3545', backgroundColor: 'var(--bs-body-bg)', padding: '4px 8px', borderRadius: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+          {errorMsg}
+        </div>
       )}
     </div>
   );
