@@ -198,7 +198,7 @@ export default function TopicPage() {
                       Автор: {topic.owner.username} · Создана: {new Date(topic.created_at).toLocaleString('ru-RU')}
                     </div>
                   </div>
-                  <div className="d-flex gap-2 align-items-center">
+                  <div className="topic-actions d-flex gap-2 align-items-center">
                     {canEditTopic && (
                       <button className="btn btn-sm btn-outline-secondary" onClick={() => navigate(`/topics/${id}/edit`)}>
                         Редактировать
@@ -254,17 +254,17 @@ export default function TopicPage() {
                           {p.text}
                         </div>
                         {(p.owner.id === user?.id || isAdmin) && (
-                          <div className="d-flex gap-1 ms-3 flex-shrink-0 align-items-center">
+                          <div className="post-actions d-flex gap-1 ms-3 flex-shrink-0 align-items-center">
                             {p.owner.id === user?.id && (
                               <button
-                                className="btn btn-sm btn-outline-secondary py-0 px-2"
+                                className="btn btn-sm btn-outline-secondary px-2"
                                 onClick={() => setEditingPost(p)}
                               >
                                 Изменить
                               </button>
                             )}
                             <button
-                              className="btn btn-sm btn-outline-danger py-0 px-2"
+                              className="btn btn-sm btn-outline-danger px-2"
                               onClick={() => deletePost(p)}
                             >
                               Удалить
