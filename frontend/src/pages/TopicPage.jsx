@@ -382,7 +382,7 @@ export default function TopicPage() {
                         {p.text}
                       </div>
                       <div className="text-muted-small mt-1 d-flex align-items-center gap-2 flex-wrap">
-                        <span className="fw-semibold text-dark">{p.owner.username}</span>
+                        <span className="fw-semibold text-body">{p.owner.username}</span>
                         <span>·</span>
                         <span>{new Date(p.created_at).toLocaleString('ru-RU')}</span>
                         {p.updated_at !== p.created_at && (

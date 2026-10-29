@@ -121,7 +121,7 @@ export default function CategoryPage() {
             <Link
               key={t.id}
               to={`/topics/${t.id}`}
-              className="list-group-item list-group-item-action bg-white"
+              className="list-group-item list-group-item-action bg-body"
             >
               <div className="d-flex justify-content-between align-items-center gap-3">
                 <span className="cat-icon" style={{ width: 38, height: 38, fontSize: '1rem' }}>
