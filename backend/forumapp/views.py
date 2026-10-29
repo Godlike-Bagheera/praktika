@@ -5,6 +5,7 @@ import os
 import re
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import (
     CharField, Count, Exists, IntegerField, Lookup, OuterRef, Q, TextField, Value,
@@ -28,8 +29,15 @@ from accounts.serializers import (
     RegisterSerializer,
     TopicPatchSerializer,
 )
-from .models import Category, Post, PostReport, Topic, UserMention
-from .notifications import notify_admins_about_report, notify_mentions
+from .models import (
+    Category,
+    Post,
+    PostReport,
+    ReportNotification,
+    Topic,
+    UserMention,
+)
+from .notifications import notify_mentions
 from .pagination import ForumPagination
 from .permissions import IsAdmin, OwnerOrAdminDelete, OwnerOnlyEdit
 from .serializers import (
@@ -38,6 +46,7 @@ from .serializers import (
     PostPatchSerializer,
     PostReportCreateSerializer,
     PostReportSerializer,
+    ReportNotificationSerializer,
     PostSerializer,
     TopicPatchSerializer,
     TopicSerializer,
@@ -1010,11 +1019,25 @@ class ReportCreateView(APIView):
         try:
             with transaction.atomic():
                 report = serializer.save(user=request.user)
-                # Уведомляем ВСЕХ активных админов о новой жалобе через
-                # существующую систему (UserMention → колокольчик в хедере).
+                # Отдельная система уведомлений о жалобах (не @упоминания):
+                # создаём ReportNotification для ВСЕХ активных админов.
                 print(f"Report created: user={request.user.username}, "
                       f"post={report.post.id}")
-                notify_admins_about_report(report.post, request.user)
+                User = get_user_model()
+                admins = User.objects.filter(
+                    role=User.Role.ADMIN, is_active=True)
+                print(f"Found {admins.count()} admins")
+                for admin in admins:
+                    print(f"  - Admin: {admin.username}")
+                    _, created = ReportNotification.objects.get_or_create(
+                        admin=admin, report=report)
+                    if created:
+                        message = (
+                            f"Created notification for admin {admin.username}"
+                            f" about post {report.post.id}"
+                        )
+                        print(message)
+                        logger.info(message)
         except IntegrityError:
             # Гонка: два параллельных запроса жалобы от одного пользователя.
             return Response(
@@ -1079,6 +1102,51 @@ class ReportActionView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         report.save(update_fields=["status"])
         return Response(PostReportSerializer(report).data)
+
+
+class AdminReportNotificationListView(APIView):
+    """GET /api/admin-report-notifications/ — уведомления админа о жалобах."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        qs = (
+            ReportNotification.objects.filter(admin=request.user)
+            .select_related(
+                "report__user", "report__post__owner", "report__post__topic")
+        )
+        unread_only = request.query_params.get("unread")
+        if unread_only and unread_only.lower() in ("1", "true"):
+            qs = qs.filter(read_at__isnull=True)
+        serializer = ReportNotificationSerializer(qs, many=True)
+        return Response(serializer.data)
+
+
+class AdminReportNotificationMarkReadView(APIView):
+    """POST /api/admin-report-notifications/read/ — отметить прочитанными."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request):
+        ids = (request.data or {}).get("ids")
+        now = datetime.datetime.now(datetime.timezone.utc)
+        qs = ReportNotification.objects.filter(
+            admin=request.user, read_at__isnull=True)
+        if isinstance(ids, list) and ids:
+            qs = qs.filter(id__in=ids)
+        updated = qs.update(read_at=now)
+        return Response({"updated": updated})
+
+
+class AdminReportNotificationUnreadCountView(APIView):
+    """GET /api/admin-report-notifications/unread-count/ — счётчик непрочитанных."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        count = ReportNotification.objects.filter(
+            admin=request.user, read_at__isnull=True).count()
+        return Response({"count": count})
 
 
 class PendingReportsCountView(APIView):

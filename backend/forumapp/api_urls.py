@@ -40,6 +40,17 @@ urlpatterns = [
     path("reports/<int:pk>/action/", views.ReportActionView.as_view(),
          name="report-action"),
     path("reports/", views.ReportListView.as_view(), name="reports-list"),
+
+    # Уведомления админа о жалобах (отдельная система, admin only)
+    path("admin-report-notifications/",
+         views.AdminReportNotificationListView.as_view(),
+         name="admin-report-notifications"),
+    path("admin-report-notifications/read/",
+         views.AdminReportNotificationMarkReadView.as_view(),
+         name="admin-report-notifications-read"),
+    path("admin-report-notifications/unread-count/",
+         views.AdminReportNotificationUnreadCountView.as_view(),
+         name="admin-report-notifications-unread-count"),
     # Notifications
     path("notifications", views.NotificationListView.as_view(),
          name="notification-list"),

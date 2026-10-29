@@ -1,4 +1,4 @@
-"""Генерация уведомлений о упоминаниях (@username) и жалобах в сообщениях."""
+"""Генерация уведомлений об упоминаниях (@username) в сообщениях."""
 
 import logging
 import re
@@ -50,32 +50,3 @@ def notify_mentions(post: Post) -> set:
     if to_create:
         UserMention.objects.bulk_create(to_create)
     return set(mentioned_ids)
-
-
-def notify_admins_about_report(post: Post, reporter) -> int:
-    """Создать уведомление-«колокольчик» (UserMention) для ВСЕХ активных админов
-    о новой жалобе на пост.
-
-    Идемпотентно: если у админа уже есть уведомление по этому посту — дубль не
-    создаётся (уникальный запрет unique_mention_per_post). Возвращает количество
-    созданных уведомлений.
-    """
-    User = get_user_model()
-    admins = User.objects.filter(role=User.Role.ADMIN, is_active=True)
-
-    created_count = 0
-    for admin in admins:
-        mention, created = UserMention.objects.get_or_create(
-            user=admin,
-            post=post,
-            defaults={"read_at": None},
-        )
-        if created:
-            created_count += 1
-            message = (
-                f"Created notification for admin {admin.username} "
-                f"about post {post.id}"
-            )
-            print(message)
-            logger.info(message)
-    return created_count

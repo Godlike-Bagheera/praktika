@@ -126,6 +126,39 @@ class PostReport(models.Model):
         return f"Report {self.pk} on post {self.post_id} by {self.user_id}"
 
 
+class ReportNotification(models.Model):
+    """Отдельное уведомление администратору о новой жалобе на сообщение.
+
+    Не смешивается с системой @упоминаний (UserMention): у уведомления
+    понятный текст («X пожаловался на сообщение от Y»), своя точка чтения.
+    """
+
+    admin = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="report_notifications", verbose_name="админ",
+    )
+    report = models.ForeignKey(
+        PostReport, on_delete=models.CASCADE,
+        related_name="notifications", verbose_name="жалоба",
+    )
+    read_at = models.DateTimeField("прочитано", null=True, blank=True)
+    created_at = models.DateTimeField("дата", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "уведомление о жалобе"
+        verbose_name_plural = "уведомления о жалобах"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["admin", "report"],
+                name="unique_report_notification_per_admin",
+            ),
+        ]
+
+    def __str__(self):
+        return f"ReportNotification {self.pk}: admin={self.admin_id} report={self.report_id}"
+
+
 class UserMention(models.Model):
     """Уведомление: в сообщении `post` упомянут пользователь `user` через @username."""
 

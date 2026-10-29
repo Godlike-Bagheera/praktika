@@ -1,7 +1,7 @@
 from django.db import IntegrityError, transaction
 from rest_framework import serializers
 
-from .models import Category, Post, PostReport, Topic
+from .models import Category, Post, PostReport, ReportNotification, Topic
 from .profanity import contains_profanity
 
 
@@ -178,6 +178,29 @@ class PostReportCreateSerializer(serializers.ModelSerializer):
         if value not in PostReport.Reason.values:
             raise serializers.ValidationError("Неизвестная причина жалобы")
         return value
+
+
+class ReportNotificationSerializer(serializers.ModelSerializer):
+    """Уведомление админу о жалобе: понятные поля, без текста поста."""
+
+    reporter_username = serializers.CharField(
+        source="report.user.username", read_only=True)
+    post_id = serializers.IntegerField(source="report.post.id", read_only=True)
+    topic_title = serializers.CharField(
+        source="report.post.topic.title", read_only=True)
+    topic_id = serializers.IntegerField(
+        source="report.post.topic.id", read_only=True)
+    reason_display = serializers.CharField(
+        source="report.get_reason_display", read_only=True)
+    post_author = serializers.CharField(
+        source="report.post.owner.username", read_only=True)
+
+    class Meta:
+        model = ReportNotification
+        fields = [
+            "id", "reporter_username", "post_id", "topic_title", "topic_id",
+            "reason_display", "post_author", "read_at", "created_at",
+        ]
 
 
 class TopicPatchSerializer(serializers.Serializer):

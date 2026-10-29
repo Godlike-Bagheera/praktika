@@ -1,6 +1,13 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
-from forumapp.models import Category, Topic, Post, UserMention, PostReport
+from forumapp.models import (
+    Category,
+    Topic,
+    Post,
+    UserMention,
+    PostReport,
+    ReportNotification,
+)
 from forumapp.notifications import notify_mentions
 from forumapp.serializers import CategorySerializer
 
@@ -936,21 +943,47 @@ class ReportTests(TestCase):
         self.assertEqual(r2.json()["count"], 1)
 
     def test_admin_notified_on_new_report(self):
-        """Вариант А: создание жалобы уведомляет админа через UserMention."""
+        """Отдельная система: жалоба создаёт ReportNotification админу,
+        но НЕ создаёт уведомление через @упоминания (UserMention)."""
         c = self._client(self.reporter)
         r = c.post(f"/api/posts/{self.post.id}/report/",
                    data={"post": self.post.id, "reason": "spam"},
                    content_type="application/json")
         self.assertEqual(r.status_code, 201)
-        # Админ получил уведомление на пост, к которому пожаловались
-        self.assertTrue(UserMention.objects.filter(
+        # Уведомление о жалобе создано для активного админа
+        self.assertTrue(ReportNotification.objects.filter(
+            admin=self.admin, report__post=self.post).exists())
+        # Старая система @упоминаний не задействована
+        self.assertFalse(UserMention.objects.filter(
             user=self.admin, post=self.post).exists())
-        # Автор поста-админ тоже получает уведомление о жалобе (все активные
-        # админы; идемпотентность обеспечивает get_or_create)
-        # Уведомление видно админу в существующей системе (колокольчик)
+        # Понятный текст и поля в новом эндпоинте
         ac = self._client(self.admin)
-        n = ac.get("/api/notifications?unread=1&limit=10")
+        n = ac.get("/api/admin-report-notifications/?unread=1")
         self.assertEqual(n.status_code, 200)
-        body = n.json()
-        items = body["results"] if isinstance(body, dict) and "results" in body else body
-        self.assertIn(self.post.id, [x["post_id"] for x in items])
+        items = n.json()
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        self.assertEqual(item["reporter_username"], "reporter1")
+        self.assertEqual(item["post_author"], "author1")
+        self.assertEqual(item["reason_display"], "Спам")
+        self.assertEqual(item["topic_title"], "Тема для жалоб")
+        self.assertEqual(item["topic_id"], self.topic.id)
+        self.assertEqual(item["post_id"], self.post.id)
+        # Счётчик непрочитанных
+        cnt = ac.get("/api/admin-report-notifications/unread-count/").json()
+        self.assertEqual(cnt["count"], 1)
+        # Открытие списка сбрасывает счётчик (mark read)
+        m = ac.post("/api/admin-report-notifications/read/",
+                    data={}, content_type="application/json")
+        self.assertEqual(m.status_code, 200)
+        self.assertEqual(m.json()["updated"], 1)
+        cnt2 = ac.get("/api/admin-report-notifications/unread-count/").json()
+        self.assertEqual(cnt2["count"], 0)
+        # Идемпотентность: вторая жалоба на тот же пост не создаёт дубль
+        # уведомления тому же админу (уникальное ограничение admin+report)
+        rep2 = PostReport.objects.create(user=self.author, post=Post.objects.create(
+            topic=self.topic, owner=self.reporter, text="другой"), reason="spam")
+        ReportNotification.objects.get_or_create(admin=self.admin, report=rep2)
+        before = ReportNotification.objects.count()
+        ReportNotification.objects.get_or_create(admin=self.admin, report=rep2)
+        self.assertEqual(ReportNotification.objects.count(), before)
