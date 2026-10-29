@@ -183,13 +183,24 @@ SIMPLE_JWT = {
 # --------------------------------------------------------------------------
 # CORS (for local development; nginx proxies API in production)
 # --------------------------------------------------------------------------
-# По умолчанию: разрешено «всё» только в DEBUG. В production
-# (DJANGO_DEBUG=False) CORS_ALLOW_ALL_ORIGINS всегда False — любой сайт не
-# сможет слать запросы к API с чужого домена. Явный escape-hatch
-# CORS_ALLOW_ALL=true остаётся, но использовать его в проде не следует;
-# вместо него перечислите свои домены через CORS_ALLOWED_ORIGINS
-# (через запятую).
+# В production (DEBUG=False) CORS_ALLOW_ALL_ORIGINS жёстко False: любой сайт
+# не сможет слать запросы к API с чужого домена. Если администратор всё же
+# выставил CORS_ALLOW_ALL=true при DEBUG=False — это ошибка конфигурации:
+# выводим предупреждение в лог при старте Django (сервер НЕ падает), а
+# wildcard по-прежнему игнорируется. Для внешних фронтендов используйте
+# whitelist CORS_ALLOWED_ORIGINS (через запятую, пример в .env.example).
 CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL", DEBUG) and DEBUG
+
+if not DEBUG and env_bool("CORS_ALLOW_ALL", False):
+    import warnings
+    warnings.warn(
+        "CORS_ALLOW_ALL=true проигнорирован в production (DEBUG=False): "
+        "CORS_ALLOW_ALL_ORIGINS оставлен False. Перечислите свои домены "
+        "через CORS_ALLOWED_ORIGINS.",
+        RuntimeWarning,
+        stacklevel=1,
+    )
+
 CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
