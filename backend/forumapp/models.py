@@ -71,6 +71,7 @@ class Post(models.Model):
         "текст",
         validators=[MaxLengthValidator(2000, message="Введите сообщение (до 2000 символов)")],
     )
+    is_hidden = models.BooleanField("скрыто модератором", default=False)
     created_at = models.DateTimeField("дата создания", auto_now_add=True)
     updated_at = models.DateTimeField("дата изменения", auto_now=True)
 
@@ -81,6 +82,48 @@ class Post(models.Model):
 
     def __str__(self):
         return f"Post {self.pk} in Topic {self.topic_id}"
+
+
+class PostReport(models.Model):
+    """Жалоба пользователя на сообщение. Модерируется администратором."""
+
+    class Reason(models.TextChoices):
+        SPAM = "spam", "Спам"
+        OFFTOPIC = "offtopic", "Не по теме"
+        INSULT = "insult", "Оскорбление"
+        OTHER = "other", "Другое"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "На рассмотрении"
+        RESOLVED = "resolved", "Решено"
+        DISMISSED = "dismissed", "Отклонено"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="reports_made", verbose_name="автор жалобы",
+    )
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE,
+        related_name="reports", verbose_name="сообщение",
+    )
+    reason = models.CharField("причина", max_length=20, choices=Reason.choices)
+    status = models.CharField(
+        "статус", max_length=20, choices=Status.choices, default=Status.PENDING,
+    )
+    created_at = models.DateTimeField("дата", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "жалоба"
+        verbose_name_plural = "жалобы"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "post"], name="unique_report_per_user_post",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Report {self.pk} on post {self.post_id} by {self.user_id}"
 
 
 class UserMention(models.Model):

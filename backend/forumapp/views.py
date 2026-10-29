@@ -5,11 +5,12 @@ import os
 import re
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import (
     CharField, Count, Exists, IntegerField, Lookup, OuterRef, Q, TextField, Value,
 )
 from django.db.models.functions import TruncDate
-from django.db.utils import OperationalError, ProgrammingError
+from django.db.utils import IntegrityError, OperationalError, ProgrammingError
 from django.http import HttpResponse
 from rest_framework import serializers, status
 from rest_framework.decorators import (
@@ -27,7 +28,7 @@ from accounts.serializers import (
     RegisterSerializer,
     TopicPatchSerializer,
 )
-from .models import Category, Post, Topic, UserMention
+from .models import Category, Post, PostReport, Topic, UserMention
 from .notifications import notify_mentions
 from .pagination import ForumPagination
 from .permissions import IsAdmin, OwnerOrAdminDelete, OwnerOnlyEdit
@@ -35,6 +36,8 @@ from .serializers import (
     CategoryNameConflict,
     CategorySerializer,
     PostPatchSerializer,
+    PostReportCreateSerializer,
+    PostReportSerializer,
     PostSerializer,
     TopicPatchSerializer,
     TopicSerializer,
@@ -494,6 +497,10 @@ class TopicPostsListView(APIView):
     def get(self, request, pk):
         topic = self.get_topic(pk)
         qs = Post.objects.filter(topic=topic).select_related("owner")
+        # Скрытые модератором посты не показываются обычным пользователям;
+        # админ видит их с пометкой is_hidden (см. PostSerializer).
+        if not getattr(request.user, "is_admin_role", False):
+            qs = qs.filter(is_hidden=False)
         search = request.query_params.get("search")
         if search:
             # все слова запроса должны присутствовать в тексте сообщения
@@ -729,7 +736,9 @@ class PostsExportView(APIView):
         is_admin = getattr(user, "is_admin_role", False)
         qs = Post.objects.select_related("owner", "topic")
         if not is_admin:
-            qs = qs.filter(owner=user)
+            # Обычный пользователь: только свои посты, скрытые модератором — не его.
+            qs = qs.filter(owner=user, is_hidden=False)
+        # Админ: все посты (скрытые тоже, для аудита).
         topic = request.query_params.get("topic")
         if topic:
             qs = qs.filter(topic_id=topic)
@@ -957,3 +966,94 @@ class NotificationMarkReadView(APIView):
             qs = qs.filter(id__in=ids)
         updated = qs.update(read_at=now)
         return Response({"updated": updated})
+
+
+# ---------------------------------------------------------------------------
+# Post reports (жалобы на сообщения) + модерация (только админ)
+# ---------------------------------------------------------------------------
+class ReportCreateView(APIView):
+    """POST /api/posts/<post_id>/report/ — создать жалобу на чужой пост."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        post = Post.objects.filter(pk=post_id).first()
+        if post is None:
+            raise NotFound("Сообщение не найдено")
+        data = dict(request.data or {})
+        # Идентификатор поста берём из URL; поле post в теле игнорируется.
+        data["post"] = post.pk
+        serializer = PostReportCreateSerializer(
+            data=data, context={"request": request},
+        )
+        if not serializer.is_valid():
+            errs = {f: (v[0] if isinstance(v, list) else v)
+                    for f, v in serializer.errors.items()}
+            return Response({"errors": errs},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            with transaction.atomic():
+                serializer.save(user=request.user)
+        except IntegrityError:
+            # Гонка: два параллельных запроса жалобы от одного пользователя.
+            return Response(
+                {"errors": {"post": "Вы уже жаловались на это сообщение"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"detail": "Жалоба отправлена"},
+                        status=status.HTTP_201_CREATED)
+
+
+class ReportListView(APIView):
+    """GET /api/reports/?status=pending — список жалоб (админ)."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        qs = PostReport.objects.select_related(
+            "user", "post__owner", "post__topic",
+        ).all()
+        status_filter = request.query_params.get("status")
+        if status_filter:
+            if status_filter not in PostReport.Status.values:
+                return Response(
+                    {"errors": {"status": "Неизвестный статус"}},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            qs = qs.filter(status=status_filter)
+        return Response(PostReportSerializer(qs, many=True).data)
+
+
+class ReportActionView(APIView):
+    """POST /api/reports/<pk>/action/ — resolve (скрыть пост) / dismiss."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def post(self, request, pk):
+        report = PostReport.objects.filter(pk=pk).first()
+        if report is None:
+            raise NotFound("Жалоба не найдена")
+        action = (request.data or {}).get("action")
+        if action == "resolve":
+            report.status = PostReport.Status.RESOLVED
+            report.post.is_hidden = True
+            report.post.save(update_fields=["is_hidden"])
+        elif action == "dismiss":
+            report.status = PostReport.Status.DISMISSED
+        else:
+            return Response({"error": "Неизвестное действие"},
+                            status=status.HTTP_400_BAD_REQUEST)
+        report.save(update_fields=["status"])
+        return Response(PostReportSerializer(report).data)
+
+
+class PendingReportsCountView(APIView):
+    """GET /api/reports/pending-count/ — число жалоб на рассмотрении."""
+
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    def get(self, request):
+        count = PostReport.objects.filter(
+            status=PostReport.Status.PENDING,
+        ).count()
+        return Response({"count": count})

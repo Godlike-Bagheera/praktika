@@ -1,7 +1,7 @@
 from django.db import IntegrityError, transaction
 from rest_framework import serializers
 
-from .models import Category, Post, Topic
+from .models import Category, Post, PostReport, Topic
 from .profanity import contains_profanity
 
 
@@ -119,10 +119,10 @@ class PostSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             "id", "topic", "topic_title", "owner", "text",
-            "created_at", "updated_at",
+            "created_at", "updated_at", "is_hidden",
         ]
         read_only_fields = ["id", "topic", "owner", "created_at",
-                            "updated_at", "topic_title"]
+                            "updated_at", "topic_title", "is_hidden"]
 
     def validate_text(self, value):
         value = (value or "").strip()
@@ -131,6 +131,53 @@ class PostSerializer(serializers.ModelSerializer):
                 "Введите сообщение (до 2000 символов)"
             )
         return check_profanity(value)
+
+
+class PostReportSerializer(serializers.ModelSerializer):
+    post_title = serializers.CharField(source="post.topic.title", read_only=True)
+    post_author = serializers.CharField(source="post.owner.username", read_only=True)
+    reporter_username = serializers.CharField(source="user.username", read_only=True)
+    reason_display = serializers.CharField(source="get_reason_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = PostReport
+        fields = [
+            "id", "post", "post_title", "post_author", "reason",
+            "reason_display", "status", "status_display", "created_at",
+            "reporter_username",
+        ]
+        read_only_fields = [
+            "status", "created_at", "reporter_username",
+            "post_title", "post_author",
+        ]
+
+    def validate_post(self, value):
+        user = self.context["request"].user
+        if value.owner_id == user.id:
+            raise serializers.ValidationError(
+                "Нельзя пожаловаться на своё сообщение"
+            )
+        if PostReport.objects.filter(user=user, post=value).exists():
+            raise serializers.ValidationError(
+                "Вы уже жаловались на это сообщение"
+            )
+        return value
+
+
+class PostReportCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostReport
+        fields = ["post", "reason"]
+
+    def validate_post(self, value):
+        # Общая валидация с PostReportSerializer (свой пост / дубль жалобы).
+        return PostReportSerializer.validate_post(self, value)
+
+    def validate_reason(self, value):
+        if value not in PostReport.Reason.values:
+            raise serializers.ValidationError("Неизвестная причина жалобы")
+        return value
 
 
 class TopicPatchSerializer(serializers.Serializer):
