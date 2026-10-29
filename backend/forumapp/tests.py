@@ -916,3 +916,26 @@ class ReportTests(TestCase):
                content_type="application/json")
         r2 = c.get("/api/reports/pending-count/")
         self.assertEqual(r2.json()["count"], 1)
+
+    def test_admin_notified_on_new_report(self):
+        """Вариант А: создание жалобы уведомляет админа через UserMention."""
+        c = self._client(self.reporter)
+        r = c.post(f"/api/posts/{self.post.id}/report/",
+                   data={"post": self.post.id, "reason": "spam"},
+                   content_type="application/json")
+        self.assertEqual(r.status_code, 201)
+        # Админ получил уведомление на пост, к которому пожаловались
+        self.assertTrue(UserMention.objects.filter(
+            user=self.admin, post=self.post).exists())
+        # Автор жалобы и автор поста — не уведомляются
+        self.assertFalse(UserMention.objects.filter(
+            user=self.reporter, post=self.post).exists())
+        self.assertFalse(UserMention.objects.filter(
+            user=self.author, post=self.post).exists())
+        # Уведомление видно админу в существующей системе (колокольчик)
+        ac = self._client(self.admin)
+        n = ac.get("/api/notifications?unread=1&limit=10")
+        self.assertEqual(n.status_code, 200)
+        body = n.json()
+        items = body["results"] if isinstance(body, dict) and "results" in body else body
+        self.assertIn(self.post.id, [x["post_id"] for x in items])

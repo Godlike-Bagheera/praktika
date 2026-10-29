@@ -74,22 +74,6 @@ export default function Header() {
         </Link>
         <div className="ms-auto d-flex align-items-center gap-2">
           <ThemeToggle />
-          {isAdmin && (
-            <Link
-              to="/reports"
-              className="btn btn-sm btn-outline-light position-relative"
-              title="Жалобы на модерацию"
-              aria-label="Жалобы на модерацию"
-            >
-              🛡️
-              {pendingReports > 0 && (
-                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                  {pendingReports > 99 ? '99+' : pendingReports}
-                  <span className="visually-hidden"> жалоб на рассмотрении</span>
-                </span>
-              )}
-            </Link>
-          )}
           {user && (
             <div className="profile-menu" ref={menuRef}>
               <button
@@ -117,6 +101,20 @@ export default function Header() {
                       <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
                     )}
                   </Link>
+                  {isAdmin && (
+                    <Link
+                      className="profile-menu-item"
+                      to="/reports"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      🛡️ Жалобы
+                      {pendingReports > 0 && (
+                        <span className="notif-badge">
+                          {pendingReports > 99 ? '99+' : pendingReports}
+                        </span>
+                      )}
+                    </Link>
+                  )}
                   {isAdmin && (
                     <Link
                       className="profile-menu-item"

@@ -584,6 +584,70 @@ body, .card, .form-control, .btn, .navbar {
   background-color: #212529;
 }
 
+/* ---------------------------------------------------------------------------
+   Виджет жалобы (выпадающий список причин вместо модалки — не оставляет
+   .modal-backdrop на весь экран)
+--------------------------------------------------------------------------- */
+.report-widget { z-index: 30; }
+.report-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 210px;
+  z-index: 1050;
+  background: var(--bs-body-bg, #fff);
+  border-color: var(--bs-border-color, #dee2e6);
+}
+.report-menu-title {
+  font-size: .8rem; font-weight: 600; padding: 2px 4px 6px;
+  color: var(--bs-body-color, #374151);
+}
+.report-notice {
+  font-size: .72rem; margin-top: 2px; white-space: nowrap;
+}
+
+/* Кнопка «Пожаловаться» — заметная в обеих темах */
+.btn-report:not(.disabled) { font-weight: 500; }
+[data-bs-theme="dark"] .btn-report.btn-outline-danger {
+  color: #f87171;
+  border-color: #dc3545;
+}
+[data-bs-theme="dark"] .btn-report.btn-outline-danger:hover {
+  background-color: #dc3545;
+  color: #fff;
+}
+
+/* Улучшенный контраст тёмной темы: кнопки, поля форм, дропдауны */
+[data-bs-theme="dark"] .btn-outline-secondary {
+  color: #adb5bd;
+  border-color: #6c757d;
+}
+[data-bs-theme="dark"] .btn-outline-secondary:hover {
+  background-color: #6c757d;
+  color: #fff;
+}
+[data-bs-theme="dark"] .form-control {
+  background-color: #2b3035;
+  color: #e9ecef;
+  border-color: #495057;
+}
+[data-bs-theme="dark"] .form-control:focus {
+  background-color: #2b3035;
+  color: #fff;
+  border-color: #0d6efd;
+}
+[data-bs-theme="dark"] .dropdown-menu {
+  background-color: #212529;
+  border-color: #495057;
+}
+[data-bs-theme="dark"] .dropdown-item {
+  color: #e9ecef;
+}
+[data-bs-theme="dark"] .dropdown-item:hover {
+  background-color: #495057;
+  color: #fff;
+}
+
 /* ---------- Переключатель темы (солнце/луна) ---------- */
 .theme-toggle {
   position: relative;

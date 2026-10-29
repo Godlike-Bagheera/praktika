@@ -29,7 +29,7 @@ from accounts.serializers import (
     TopicPatchSerializer,
 )
 from .models import Category, Post, PostReport, Topic, UserMention
-from .notifications import notify_mentions
+from .notifications import notify_admins_about_report, notify_mentions
 from .pagination import ForumPagination
 from .permissions import IsAdmin, OwnerOrAdminDelete, OwnerOnlyEdit
 from .serializers import (
@@ -994,6 +994,9 @@ class ReportCreateView(APIView):
         try:
             with transaction.atomic():
                 serializer.save(user=request.user)
+                # Вариант А: уведомляем админов о новой жалобе через существующую
+                # систему уведомлений (UserMention → колокольчик в хедере).
+                notify_admins_about_report(post, request.user)
         except IntegrityError:
             # Гонка: два параллельных запроса жалобы от одного пользователя.
             return Response(
