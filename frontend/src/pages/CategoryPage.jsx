@@ -123,7 +123,7 @@ export default function CategoryPage() {
               to={`/topics/${t.id}`}
               className="list-group-item list-group-item-action bg-white"
             >
-              <div className="d-flex justify-content-between align-items-start gap-3">
+              <div className="d-flex justify-content-between align-items-center gap-3">
                 <span className="cat-icon" style={{ width: 38, height: 38, fontSize: '1rem' }}>
                   {t.title.charAt(0).toUpperCase()}
                 </span>
