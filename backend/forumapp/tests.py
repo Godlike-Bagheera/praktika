@@ -633,6 +633,30 @@ class NotificationMentionTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(UserMention.objects.filter(user=self.user1).count(), 1)
 
+    def test_edit_post_swap_mention_removes_old_creates_new(self):
+        # Тест из code review: пост с @alice редактируется на @carol —
+        # UserMention для alice удаляется, для carol создаётся.
+        # (В паре alice->bob нельзя проверить «новое создано», т.к. bob —
+        # автор поста и самоупоминания не уведомляются, поэтому carol.)
+        from django.core.cache import cache
+        cache.clear()
+        user3 = User.objects.create_user(
+            email="carol@c.com", username="carol",
+            password="Zx9Kp7mQ2wLtr4!v")
+        p = self._post_text("важно для @alice")
+        pid = p.json()["id"]
+        self.assertEqual(
+            UserMention.objects.filter(post_id=pid, user=self.user1).count(), 1)
+        resp = self.c.put(f"/api/posts/{pid}", {"text": "важно для @carol"},
+                          content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        # старое уведомление (для alice) удалено
+        self.assertEqual(
+            UserMention.objects.filter(post_id=pid, user=self.user1).count(), 0)
+        # новое уведомление (для carol) создано
+        self.assertEqual(
+            UserMention.objects.filter(post_id=pid, user=user3).count(), 1)
+
     def test_edit_post_removes_dropped_mention(self):
         # убрали @alice из текста при редактировании — уведомление удаляется
         p = self._post_text("привет @alice")

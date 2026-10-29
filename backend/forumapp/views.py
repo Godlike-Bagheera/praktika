@@ -615,20 +615,32 @@ def _build_search_q_topic(query):
     либо в текстах сообщений одной и той же темы (слова могут быть в разных
     сообщениях — прежняя семантика, на которой написаны тесты).
 
-    Условие по постам выносится в отдельный НЕкоррелированный запрос
-    (см. _topics_with_all_words_in_posts): он выполняется один раз на
-    весь поиск, а не N correlated EXISTS-подзапросов на каждую строку
-    тем — это устраняет quadratic-налог из старой реализации."""
+    Архитектура сохранена: фильтр строится как Q с EXISTS/IN, совместимый с
+    пагинацией DRF. Внутри условие по постам вынесено в один некоррелированный
+    подзапрос (_topics_with_all_words_in_posts), а не N correlated EXISTS на
+    каждую строку тем."""
     words = _search_words(query)
     if not words:
+        # Пустой/короткий запрос (< 2 символов): одна проверка «вся строка
+        # встречается в тексте поста темы» — без разбивки на слова.
+        stripped = (query or "").strip()
+        if not stripped:
+            return ~Q(pk__in=[])  # пустой запрос матчит всё (нейтральный фильтр)
         return Q(Exists(
-            Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", query))
+            Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", stripped))
         ))
     title_q = Q()
     for w in words:
         title_q &= _contains_q("title", w)
-    posts_all = Q(pk__in=_topics_with_all_words_in_posts(words))
-    return title_q | posts_all
+    if len(words) == 1:
+        # Короткая версия для одного слова: единственный EXISTS-подзапрос
+        # (проверять распределение слов по разным постам не нужно).
+        posts_q = Q(Exists(
+            Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", words[0]))
+        ))
+    else:
+        posts_q = Q(pk__in=_topics_with_all_words_in_posts(words))
+    return title_q | posts_q
 
 
 def _topics_with_all_words_in_posts(words):
