@@ -101,11 +101,10 @@ export default function TopicPage() {
     try {
       await api.post(`/topics/${id}/posts`, { text });
       setNewText('');
-      // переходим на последнюю страницу, чтобы видеть новое сообщение
-      const total = count + 1;
-      const lastPage = Math.max(1, Math.ceil(total / limit));
+      // Новые сообщения сверху: после отправки показываем первую страницу,
+      // где только что написанное сообщение будет в самом верху.
       loadPosts();
-      if (lastPage !== page) changePage(lastPage);
+      if (page !== 1) changePage(1);
     } catch (err) {
       const errs = extractErrors(err);
       setPostError(errs.text || errs.detail || 'Не удалось отправить сообщение');

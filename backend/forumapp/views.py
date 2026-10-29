@@ -451,11 +451,14 @@ class TopicPostsListView(APIView):
         if search:
             # все слова запроса должны присутствовать в тексте сообщения
             qs = qs.filter(_build_search_q(search, ["text"]))
-        qs = qs.order_by("created_at", "id")
+        # Новые сообщения сверху (страница 1 = самые свежие), внутри страницы
+        # — по возрастанию времени, чтобы чтение было сверху вниз.
+        qs = qs.order_by("-created_at", "-id")
         paginator = ForumPagination()
         page = paginator.paginate_queryset(qs, request)
+        items = list(reversed(page))
         return paginator.get_paginated_response(
-            PostSerializer(page, many=True).data
+            PostSerializer(items, many=True).data
         )
 
     def post(self, request, pk):

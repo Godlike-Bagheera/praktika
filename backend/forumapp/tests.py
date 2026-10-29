@@ -444,6 +444,26 @@ class SearchPaginationPageTest(TestCase):
         self.assertEqual(r.status_code, 200, r.content)
         self.assertEqual(r.json()["page"], 2)
 
+    def test_posts_newest_first_within_and_across_pages(self):
+        """Новые сообщения сверху: страница 1 содержит самые свежие,
+        внутри страницы порядок — по возрастанию времени."""
+        r = self.c.get(f"/api/topics/{self.topic_with_posts.id}/posts?page=1", **self.h)
+        self.assertEqual(r.status_code, 200, r.content)
+        first = r.json()["results"]
+        # самое свежее сообщение (keyword-24) должно быть на первой странице
+        texts = [p["text"] for p in first]
+        self.assertIn("упоминание keyword-24", texts)
+        self.assertNotIn("упоминание keyword-0", texts)  # старое — на последней
+        # внутри страницы — по возрастанию id/времени (читать сверху вниз)
+        ids = [p["id"] for p in first]
+        self.assertEqual(ids, sorted(ids))
+        # вторая страница — более старые сообщения
+        r2 = self.c.get(f"/api/topics/{self.topic_with_posts.id}/posts?page=2", **self.h)
+        second = r2.json()["results"]
+        self.assertIn("упоминание keyword-0", [p["text"] for p in second])
+        max_first = max(ids)
+        self.assertTrue(all(p["id"] < max_first for p in second))
+
 
 class StatsApiTest(TestCase):
 
