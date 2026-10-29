@@ -127,7 +127,7 @@ export default function StatsPage() {
   return (
     <>
       <div className="d-flex align-items-center justify-content-between mb-4">
-        <h1 className="forum-page-title h3 mb-0">Статистика форума</h1>
+        <h1 className="h3 mb-0 page-title">Статистика форума</h1>
         <Link to="/" className="btn btn-primary">
           ← На главную
         </Link>
