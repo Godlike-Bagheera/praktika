@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { useNotifications } from '../NotificationsContext';
+import { api } from '../api';
 import ThemeToggle from './ThemeToggle';
 
 export default function Header() {
@@ -11,6 +12,34 @@ export default function Header() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
+  const [pendingReports, setPendingReports] = useState(0);
+
+  // Счётчик жалоб «на рассмотрении» для админа: при монтировании + каждые 30 сек.
+  useEffect(() => {
+    if (!isAdmin) {
+      setPendingReports(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const loadCount = () => {
+      api
+        .get('/reports/pending-count/')
+        .then((resp) => {
+          if (!cancelled) setPendingReports(resp.data.count ?? 0);
+        })
+        .catch(() => {});
+    };
+    loadCount();
+    const timer = setInterval(loadCount, 30000);
+    // Внеочередное обновление после действий на странице /reports
+    const onRefresh = () => loadCount();
+    window.addEventListener('forum-reports-refresh', onRefresh);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('forum-reports-refresh', onRefresh);
+    };
+  }, [isAdmin]);
 
   // Закрытие меню по клику вне него и по Escape
   useEffect(() => {
@@ -45,6 +74,22 @@ export default function Header() {
         </Link>
         <div className="ms-auto d-flex align-items-center gap-2">
           <ThemeToggle />
+          {isAdmin && (
+            <Link
+              to="/reports"
+              className="btn btn-sm btn-outline-light position-relative"
+              title="Жалобы на модерацию"
+              aria-label="Жалобы на модерацию"
+            >
+              🛡️
+              {pendingReports > 0 && (
+                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                  {pendingReports > 99 ? '99+' : pendingReports}
+                  <span className="visually-hidden"> жалоб на рассмотрении</span>
+                </span>
+              )}
+            </Link>
+          )}
           {user && (
             <div className="profile-menu" ref={menuRef}>
               <button
