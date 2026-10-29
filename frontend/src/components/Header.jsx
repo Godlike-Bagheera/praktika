@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { useNotifications } from '../NotificationsContext';
 
 export default function Header() {
   const { user, isAdmin, logout } = useAuth();
+  const notifications = useNotifications();
+  const unreadCount = notifications?.unread ?? 0;
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -57,6 +60,16 @@ export default function Header() {
 
               {menuOpen && (
                 <div className="profile-menu-dropdown">
+                  <Link
+                    className="profile-menu-item"
+                    to="/notifications"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Уведомления
+                    {unreadCount > 0 && (
+                      <span className="notif-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                    )}
+                  </Link>
                   {isAdmin && (
                     <Link
                       className="profile-menu-item"

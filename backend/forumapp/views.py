@@ -7,7 +7,7 @@ from django.db.models import CharField, Count, Exists, Lookup, OuterRef, Q, Text
 from django.db.models.functions import TruncDate
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponse
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.decorators import (
     api_view, authentication_classes, permission_classes, throttle_classes,
 )
@@ -23,7 +23,8 @@ from accounts.serializers import (
     RegisterSerializer,
     TopicPatchSerializer,
 )
-from .models import Category, Post, Topic
+from .models import Category, Post, Topic, UserMention
+from .notifications import notify_mentions
 from .pagination import ForumPagination
 from .permissions import IsAdmin, OwnerOrAdminDelete, OwnerOnlyEdit
 from .serializers import (
@@ -468,6 +469,7 @@ class TopicPostsListView(APIView):
             return Response({"errors": errs},
                             status=status.HTTP_400_BAD_REQUEST)
         post = serializer.save(topic=topic, owner=request.user)
+        notify_mentions(post)
         return Response(PostSerializer(post).data,
                         status=status.HTTP_201_CREATED)
 
@@ -500,6 +502,7 @@ class PostDetailView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         obj.text = serializer.validated_data["text"]
         obj.save(update_fields=["text", "updated_at"])
+        notify_mentions(obj)
         return Response(PostSerializer(obj).data)
 
     def delete(self, request, pk):
@@ -773,3 +776,84 @@ class ForumStatsView(APIView):
             "categories": list(categories),
             "activity": activity,
         })
+
+
+# ---------------------------------------------------------------------------
+# Notifications (упоминания @username)
+# ---------------------------------------------------------------------------
+class NotificationSerializer(serializers.Serializer):
+    """Сериализатор уведомления об упоминании."""
+
+    id = serializers.IntegerField()
+    post_id = serializers.IntegerField(source="post.id")
+    text = serializers.CharField(source="post.text", max_length=2000)
+    created_at = serializers.DateTimeField(source="post.created_at")
+    read_at = serializers.DateTimeField(allow_null=True)
+    from_user = serializers.SerializerMethodField()
+    topic_id = serializers.IntegerField(source="post.topic_id")
+    topic_title = serializers.CharField(source="post.topic.title", max_length=120)
+    category_id = serializers.IntegerField(source="post.topic.category_id")
+    category_name = serializers.CharField(source="post.topic.category.name", max_length=100)
+
+    def get_from_user(self, obj):
+        return {"id": obj.post.owner_id, "username": obj.post.owner.username}
+
+
+def _mention_qs(user):
+    return (
+        UserMention.objects.filter(user=user)
+        .select_related("post__owner", "post__topic__category")
+        .order_by("-created_at", "-id")
+    )
+
+
+class NotificationListView(APIView):
+    """GET /api/notifications?page=N — список уведомлений (с пагинацией).
+    GET /api/notifications?unread=1&limit=5 — только непрочитанные (для тостов)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = _mention_qs(request.user)
+        if request.query_params.get("unread"):
+            qs = qs.filter(read_at__isnull=True)
+        paginator = ForumPagination()
+        page = paginator.paginate_queryset(qs, request)
+        if page is not None:
+            return paginator.get_paginated_response(
+                NotificationSerializer(page, many=True).data
+            )
+        return Response(NotificationSerializer(qs, many=True).data)
+
+
+class NotificationUnreadCountView(APIView):
+    """GET /api/notifications/count — количество непрочитанных."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({"count": _mention_qs(request.user).filter(
+            read_at__isnull=True).count()})
+
+
+class NotificationMarkReadView(APIView):
+    """POST /api/notifications/read — отметить прочитанными.
+
+    Тело: {} — все; {"ids": [1,2]} — выборочно (используется всплывающими
+    тостами справа снизу, чтобы не помечать всё сразу)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ids = (request.data or {}).get("ids")
+        now = datetime.datetime.now(datetime.timezone.utc)
+        qs = UserMention.objects.filter(user=request.user, read_at__isnull=True)
+        if isinstance(ids, list) and ids:
+            try:
+                ids = [int(i) for i in ids]
+            except (TypeError, ValueError):
+                return Response({"errors": {"ids": "Некорректный формат"}},
+                                status=status.HTTP_400_BAD_REQUEST)
+            qs = qs.filter(id__in=ids)
+        updated = qs.update(read_at=now)
+        return Response({"updated": updated})

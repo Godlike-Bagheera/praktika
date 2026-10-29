@@ -1,6 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
-from forumapp.models import Category, Topic, Post
+from forumapp.models import Category, Topic, Post, UserMention
+from forumapp.notifications import notify_mentions
 from forumapp.serializers import CategorySerializer
 
 User = get_user_model()
@@ -529,3 +530,90 @@ class PaginationClampTest(TestCase):
         r = self.c.get("/api/topics?page=abc", **self.h)
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["page"], 1)
+
+
+class NotificationMentionTests(TestCase):
+    """Уведомления об упоминаниях @username в сообщениях (JWT через куки)."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.c = Client()
+        self.user1 = User.objects.create_user(email="alice@a.com", username="alice", password="Zx9Kp7mQ2wLtr4!v")
+        self.user2 = User.objects.create_user(email="bob@b.com", username="bob", password="Zx9Kp7mQ2wLtr4!v")
+        self.cat = Category.objects.create(name="Общий")
+        self.topic = Topic.objects.create(category=self.cat, title="Тест", owner=self.user1)
+        self._login("bob@b.com")
+
+    def _login(self, email):
+        from django.core.cache import cache
+        cache.clear()
+        r = self.c.post("/api/auth/login",
+                        data={"email": email, "password": "Zx9Kp7mQ2wLtr4!v"},
+                        content_type="application/json")
+        assert r.status_code == 200, r.content
+
+    def _post_text(self, text):
+        return self.c.post(
+            f"/api/topics/{self.topic.id}/posts", {"text": text},
+            content_type="application/json",
+        )
+
+    def test_mention_creates_notification(self):
+        resp = self._post_text("привет @alice как дела")
+        self.assertEqual(resp.status_code, 201)
+        n = UserMention.objects.filter(user=self.user1)
+        self.assertEqual(n.count(), 1)
+        self.assertEqual(n.first().post.text, "привет @alice как дела")
+
+    def test_no_self_mention_and_deduplication(self):
+        # bob (logged in) writes mentioning @alice twice — not self-mention,
+        # so exactly one notification for alice (duplicates collapse).
+        resp = self._post_text("упоминание @alice дважды @alice в одном посте")
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(UserMention.objects.filter(user=self.user1).count(), 1)
+
+        # a NEW post by bob mentioning himself @bob — self-mention skipped;
+        # @alice on this new post gets a fresh notification (dedup is per-post).
+        p = Post.objects.create(topic=self.topic, owner=self.user2, text="@bob и снова @alice")
+        notify_mentions(p)
+        self.assertEqual(UserMention.objects.filter(user=self.user2).count(), 0)
+        self.assertEqual(UserMention.objects.filter(user=self.user1).count(), 2)
+
+    def test_api_list_count_and_mark_read(self):
+        # alice writes mentioning @Bob — recipient is BOB, so we log in as bob
+        self.topic.owner = self.user2
+        self.topic.save(update_fields=["owner"])
+        self._login("alice@a.com")
+        self._post_text("важно для @Bob!")
+        # switch to bob: his notifications must contain the mention from alice
+        self._login("bob@b.com")
+        # count (case-insensitive match @Bob -> bob)
+        c = self.c.get("/api/notifications/count")
+        self.assertEqual(c.json()["count"], 1)
+        # список: содержит тему, категорию, автора, текст
+        items = self.c.get("/api/notifications").json()["results"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["topic_title"], "Тест")
+        self.assertEqual(items[0]["category_name"], "Общий")
+        self.assertEqual(items[0]["from_user"]["username"], "alice")
+        self.assertIsNone(items[0]["read_at"])
+        # отметка прочтения по ids
+        r = self.c.post("/api/notifications/read", {"ids": [items[0]["id"]]},
+                             content_type="application/json")
+        self.assertEqual(r.json()["updated"], 1)
+        self.assertEqual(self.c.get("/api/notifications/count").json()["count"], 0)
+
+    def test_edit_post_notifies_new_mention(self):
+        # bob (logged in) edits his post to add @alice — notification created
+        p = self._post_text("исходный текст")
+        pid = p.json()["id"]
+        resp = self.c.put(f"/api/posts/{pid}", {"text": "теперь @alice"},
+                               content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(UserMention.objects.filter(user=self.user1).count(), 1)
+
+    def test_notifications_require_auth(self):
+        fresh = Client()
+        self.assertEqual(fresh.get("/api/notifications").status_code, 401)
+        self.assertEqual(fresh.get("/api/notifications/count").status_code, 401)

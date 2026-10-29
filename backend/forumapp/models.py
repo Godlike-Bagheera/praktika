@@ -81,3 +81,31 @@ class Post(models.Model):
 
     def __str__(self):
         return f"Post {self.pk} in Topic {self.topic_id}"
+
+
+class UserMention(models.Model):
+    """Уведомление: в сообщении `post` упомянут пользователь `user` через @username."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="mentions", verbose_name="получатель",
+    )
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE,
+        related_name="mention_notifications", verbose_name="сообщение",
+    )
+    read_at = models.DateTimeField("прочитано", null=True, blank=True)
+    created_at = models.DateTimeField("дата", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "упоминание"
+        verbose_name_plural = "упоминания"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "post"], name="unique_mention_per_post",
+            ),
+        ]
+
+    def __str__(self):
+        return f"@{self.user_id} notified about post {self.post_id}"

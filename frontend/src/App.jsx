@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles.css';
 import { AuthProvider, useAuth } from './AuthContext';
+import { NotificationsProvider } from './NotificationsContext';
 import Header from './components/Header';
 import RegisterPage from './pages/RegisterPage';
 import LoginPage from './pages/LoginPage';
@@ -13,6 +14,7 @@ import TopicEditPage from './pages/TopicEditPage';
 import TopicPage from './pages/TopicPage';
 import PostEditPage from './pages/PostEditPage';
 import StatsPage from './pages/StatsPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function Booting() {
   return (
@@ -86,6 +88,7 @@ function AppRoutes() {
       />
       <Route element={<PrivateRoute />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/stats" element={<AdminRoute />}>
           <Route index element={<StatsPage />} />
         </Route>
@@ -105,7 +108,9 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
       <AuthProvider>
-        <AppRoutes />
+        <NotificationsProvider>
+          <AppRoutes />
+        </NotificationsProvider>
       </AuthProvider>
     </BrowserRouter>
   );
