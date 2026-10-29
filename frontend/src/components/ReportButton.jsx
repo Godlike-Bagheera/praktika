@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Modal } from 'bootstrap';
 import { api, errorMessage } from '../api';
 
 const REASONS = [
@@ -10,37 +9,35 @@ const REASONS = [
   { value: 'other', label: 'Другое' },
 ];
 
-// Кнопка «Пожаловаться» с Bootstrap-модалкой выбора причины.
-// Не рендерится для собственных постов пользователя.
+// Кнопка «Пожаловаться» с выпадающим списком причин (без Bootstrap-модалки:
+// она оставляла .modal-backdrop на весь экран). Список закрывается по клику
+// вне кнопки и по Escape. Не рендерится для собственных постов пользователя.
 export default function ReportButton({ postId, isOwnPost }) {
-  const modalRef = useRef(null);
-  const modalInstance = useRef(null);
+  const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false); // жалоба уже отправлена — дизейблим кнопку
-  const [notice, setNotice] = useState(''); // сообщение об успехе/ошибке внутри модалки
+  const [notice, setNotice] = useState(''); // сообщение об успехе/ошибке
+  const wrapRef = useRef(null);
   const navigate = useNavigate();
 
-  // Инициализация модалки Bootstrap (без сторонних библиотек)
+  // Закрытие по клику вне виджета и по Escape
   useEffect(() => {
-    if (modalRef.current && !modalInstance.current) {
-      modalInstance.current = new Modal(modalRef.current, { backdrop: true });
-    }
-    return () => {
-      modalInstance.current?.dispose();
-      modalInstance.current = null;
+    if (!open) return undefined;
+    const onClick = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
     };
-  }, []);
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   if (isOwnPost) return null;
-
-  const openModal = () => {
-    setNotice('');
-    modalInstance.current?.show();
-  };
-
-  const closeModal = () => {
-    modalInstance.current?.hide();
-  };
 
   const submitReason = async (reason) => {
     if (sending) return;
@@ -48,16 +45,17 @@ export default function ReportButton({ postId, isOwnPost }) {
     setNotice('');
     try {
       await api.post(`/posts/${postId}/report/`, { post: postId, reason });
-      closeModal();
+      setOpen(false);
       setDone(true);
-      window.alert('Жалоба отправлена');
+      setNotice('Жалоба отправлена');
+      window.dispatchEvent(new Event('forum-reports-refresh'));
     } catch (err) {
       const msg = errorMessage(err) || '';
       if (/уже жаловались/i.test(msg)) {
         setNotice('Вы уже отправляли жалобу на это сообщение');
         setDone(true); // повторная жалоба невозможна — кнопку больше не активим
       } else if (err?.response?.status === 401) {
-        closeModal();
+        setOpen(false);
         navigate('/login');
       } else {
         setNotice(msg || 'Не удалось отправить жалобу, попробуйте позже');
@@ -68,61 +66,51 @@ export default function ReportButton({ postId, isOwnPost }) {
   };
 
   return (
-    <>
+    <div className="report-widget position-relative d-inline-flex flex-column align-items-start" ref={wrapRef}>
       <button
         type="button"
-        className={`btn btn-sm px-2 ${done ? 'btn-secondary disabled' : 'btn-outline-secondary'}`}
-        onClick={openModal}
+        className={`btn btn-sm px-2 btn-report ${done ? 'disabled' : 'btn-outline-danger'}`}
+        onClick={() => {
+          setNotice('');
+          setOpen((v) => !v);
+        }}
         disabled={done}
+        aria-haspopup="true"
+        aria-expanded={open}
         title={done ? 'Жалоба уже отправлена' : 'Пожаловаться на сообщение'}
       >
         🚩 {done ? 'Жалоба отправлена' : 'Пожаловаться'}
       </button>
 
-      <div
-        ref={modalRef}
-        className="modal fade"
-        tabIndex={-1}
-        aria-hidden="true"
-        role="dialog"
-      >
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Пожаловаться на сообщение</h5>
+      {open && (
+        <div className="report-menu card shadow-sm">
+          <div className="card-body p-2">
+            <div className="report-menu-title">Пожаловаться на сообщение</div>
+            {REASONS.map((r) => (
               <button
+                key={r.value}
                 type="button"
-                className="btn-close"
-                aria-label="Закрыть"
-                onClick={closeModal}
-              />
-            </div>
-            <div className="modal-body d-grid gap-2">
-              {notice && (
-                <div className="alert alert-warning py-2 mb-2" role="alert">
-                  {notice}
-                </div>
-              )}
-              {REASONS.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  className="btn btn-outline-primary text-start"
-                  disabled={sending}
-                  onClick={() => submitReason(r.value)}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={closeModal}>
-                Отмена
+                className="btn btn-sm btn-outline-primary w-100 text-start mb-1"
+                disabled={sending}
+                onClick={() => submitReason(r.value)}
+              >
+                {r.label}
               </button>
-            </div>
+            ))}
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary w-100"
+              onClick={() => setOpen(false)}
+            >
+              Отмена
+            </button>
           </div>
         </div>
-      </div>
-    </>
+      )}
+
+      {notice && !open && (
+        <span className="report-notice text-body-secondary">{notice}</span>
+      )}
+    </div>
   );
 }
