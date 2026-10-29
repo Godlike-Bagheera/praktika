@@ -400,17 +400,21 @@ export default function TopicPage() {
                         <>
                           {p.owner.id === user?.id && (
                             <button
-                              className="btn btn-sm btn-outline-secondary px-2"
+                              type="button"
+                              className="btn btn-sm btn-action btn-action-edit"
                               onClick={() => setEditingPost(p)}
+                              title="Изменить сообщение"
                             >
-                              Изменить
+                              <span className="btn-icon">✏️</span>
                             </button>
                           )}
                           <button
-                            className="btn btn-sm btn-outline-danger px-2"
+                            type="button"
+                            className="btn btn-sm btn-action btn-action-delete"
                             onClick={() => deletePost(p)}
+                            title="Удалить сообщение"
                           >
-                            Удалить
+                            <span className="btn-icon">🗑</span>
                           </button>
                         </>
                       )}

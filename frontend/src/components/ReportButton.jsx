@@ -69,7 +69,7 @@ export default function ReportButton({ postId, isOwnPost }) {
     <div className="report-widget position-relative d-inline-flex flex-column align-items-start" ref={wrapRef}>
       <button
         type="button"
-        className={`btn btn-sm px-2 btn-report ${done ? 'disabled' : 'btn-outline-danger'}`}
+        className={`btn btn-sm btn-action btn-action-report ${done ? 'disabled' : ''}`}
         onClick={() => {
           setNotice('');
           setOpen((v) => !v);
@@ -79,7 +79,7 @@ export default function ReportButton({ postId, isOwnPost }) {
         aria-expanded={open}
         title={done ? 'Жалоба уже отправлена' : 'Пожаловаться на сообщение'}
       >
-        🚩 {done ? 'Жалоба отправлена' : 'Пожаловаться'}
+        <span className="btn-icon">🚩</span>
       </button>
 
       {open && (
