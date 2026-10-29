@@ -11,16 +11,18 @@ from .models import Post, UserMention
 MENTION_RE = re.compile(r"@([\wА-Яа-яЁё]{1,150})")
 
 
-def notify_mentions(post: Post) -> int:
+def notify_mentions(post: Post) -> set:
     """Создаёт уведомления всем пользователям, упомянутым в тексте поста.
 
     Автор поста не уведомляется сам себя; дубликаты в одном посте схлопываются;
     уже уведомлённые по этому посту пользователи пропускаются.
-    Возвращает количество созданных уведомлений.
+    Возвращает множество id всех актуальных упоминаемых пользователей поста
+    (используется при редактировании, чтобы удалить уведомления за убранные
+    упоминания).
     """
     usernames = {m.lower() for m in MENTION_RE.findall(post.text or "")}
     if not usernames:
-        return 0
+        return set()
 
     User = get_user_model()
     targets = list(
@@ -31,7 +33,7 @@ def notify_mentions(post: Post) -> int:
     )
     # Самоупоминание не уведомляет, но остаётся в тексте.
     if not targets:
-        return 0
+        return set()
 
     mentioned_ids = [pk for pk, _ in targets]
     already = set(
@@ -44,4 +46,4 @@ def notify_mentions(post: Post) -> int:
     ]
     if to_create:
         UserMention.objects.bulk_create(to_create)
-    return len(to_create)
+    return set(mentioned_ids)

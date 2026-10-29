@@ -633,6 +633,27 @@ class NotificationMentionTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(UserMention.objects.filter(user=self.user1).count(), 1)
 
+    def test_edit_post_removes_dropped_mention(self):
+        # убрали @alice из текста при редактировании — уведомление удаляется
+        p = self._post_text("привет @alice")
+        pid = p.json()["id"]
+        self.assertEqual(UserMention.objects.filter(user=self.user1).count(), 1)
+        resp = self.c.put(f"/api/posts/{pid}", {"text": "привет всем"},
+                          content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            UserMention.objects.filter(post_id=pid).count(), 0)
+
+    def test_edit_post_no_duplicate_on_repeated_mention(self):
+        # @alice осталась в тексте после редактирования — дубль не создаётся
+        p = self._post_text("важно @alice")
+        pid = p.json()["id"]
+        resp = self.c.put(f"/api/posts/{pid}", {"text": "важно @alice!!"},
+                          content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            UserMention.objects.filter(post_id=pid, user=self.user1).count(), 1)
+
     def test_notifications_require_auth(self):
         fresh = Client()
         self.assertEqual(fresh.get("/api/notifications").status_code, 401)

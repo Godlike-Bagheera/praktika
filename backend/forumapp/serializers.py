@@ -40,24 +40,47 @@ class CategorySerializer(serializers.ModelSerializer):
                 "Введите название категории (до 100 символов)"
             )
         qs = Category.objects.filter(name__iexact=value)
-        if not qs.exists() and getattr(self, "instance", None) is not None:
-            qs = qs.exclude(pk=self.instance.pk)
+        # При редактировании (есть instance) исключаем саму категорию из
+        # проверки — иначе переименование «Новости» -> «новости» или
+        # сохранение своего имени давало бы ложный конфликт.
+        instance = getattr(self, "instance", None)
+        if instance is not None:
+            qs = qs.exclude(pk=instance.pk)
         if qs.exists():
             raise serializers.ValidationError("Эта категория уже существует")
         return value
 
     def save(self, **kwargs):
+        # PostgreSQL (единственная поддерживаемая СУБД): name.save() приводит
+        # имя к name_lower, поэтому unique-индекс по name_lower ловит и
+        # точный дубль, и дубль в другом регистре.
+        #   * обычная повторная вставка (не гонка) -> ValueError (view 400);
+        #   * настоящая гонка (проверка iexact прошла, но INSERT упал по
+        #     unique-индексу name_lower) -> CategoryNameConflict (view 409).
+        creating = getattr(self, "instance", None) is None
+        if creating and "name" in (self.validated_data or {}):
+            # Неатомарная предварительная проверка: даёт понятный 400 для
+            # обычного двойного клика; гонку дописывает блок ниже.
+            if Category.objects.filter(
+                    name__iexact=self.validated_data["name"]).exists():
+                raise ValueError(
+                    "Категория с таким названием уже существует"
+                )
         try:
             with transaction.atomic():
                 return super().save(**kwargs)
         except IntegrityError as exc:
-            if "name_lower" not in str(exc):
-                raise
-            # Гонка при создании (несколько запросов/воркеров одновременно):
-            # уникальный индекс name_lower — последний рубеж (проверка iexact
-            # выше не атомарна). Пробрасываем сигнал наружу, чтобы view вернул
-            # 409 Conflict, а не маскировал гонку под 400 ValidationError.
-            raise CategoryNameConflict() from exc
+            msg = str(exc)
+            if creating and "name_lower" in msg:
+                # Гонка при создании: несколько запросов/воркеров прошли
+                # проверку iexact одновременно — пробрасываем сигнал,
+                # чтобы view вернул 409 Conflict, а не маскировал гонку.
+                raise CategoryNameConflict() from exc
+            if "already exists" in msg.lower():
+                raise ValueError(
+                    "Категория с таким названием уже существует"
+                ) from exc
+            raise
 
 
 class TopicSerializer(serializers.ModelSerializer):

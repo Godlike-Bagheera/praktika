@@ -3,7 +3,9 @@ import datetime
 import os
 import re
 
-from django.db.models import CharField, Count, Exists, Lookup, OuterRef, Q, TextField
+from django.db.models import (
+    CharField, Count, Exists, IntegerField, Lookup, OuterRef, Q, TextField, Value,
+)
 from django.db.models.functions import TruncDate
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponse
@@ -324,6 +326,12 @@ class CategoryListCreateView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         try:
             serializer.save()
+        except ValueError:
+            # повторный конфликт имени (обычная ошибка пользователя) -> 400
+            return Response(
+                {"errors": {"name": "Эта категория уже существует"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except CategoryNameConflict:
             # гонка одновременного создания -> 409, а не 500
             return _category_conflict_response()
@@ -349,6 +357,12 @@ class CategoryDetailView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         try:
             serializer.save()
+        except ValueError:
+            # переименование в уже занятое имя (ошибка пользователя) -> 400
+            return Response(
+                {"errors": {"name": "Эта категория уже существует"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except CategoryNameConflict:
             # гонка одновременного переименования в одно имя -> 409, а не 500
             return _category_conflict_response()
@@ -516,7 +530,18 @@ class PostDetailView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         obj.text = serializer.validated_data["text"]
         obj.save(update_fields=["text", "updated_at"])
-        notify_mentions(obj)
+        # При редактировании синхронизируем уведомления с новым текстом:
+        # добавляем свежие упоминания и удаляем уведомления за упоминания,
+        # которых в новом тексте больше нет (иначе «убрал @username» — а
+        # тост/уведомление висит; «добавил повторно» — дубль не создаётся).
+        old_mentions = set(
+            UserMention.objects.filter(post=obj)
+            .values_list("user_id", flat=True)
+        )
+        new_mentions = notify_mentions(obj)
+        removed = old_mentions - new_mentions
+        if removed:
+            UserMention.objects.filter(post=obj, user_id__in=removed).delete()
         return Response(PostSerializer(obj).data)
 
     def delete(self, request, pk):
@@ -546,6 +571,8 @@ class UniLikeLookup(Lookup):
     def as_sql(self, compiler, connection):
         lhs, lhs_params = self.process_lhs(compiler, connection)
         rhs, rhs_params = self.process_rhs(compiler, connection)
+        # PostgreSQL: LOWER() корректно работает с кириллицей, ESCAPE '\'
+        # делает \% и \_ из _contains_q буквальными символами.
         return f"LOWER({lhs}) LIKE LOWER({rhs}) ESCAPE '\\'", (
             list(lhs_params) + list(rhs_params))
 
@@ -583,32 +610,15 @@ def _build_search_q(query, fields):
     return result
 
 
-def _topics_with_all_words_in_posts(words):
-    """id тем, в СООБЩЕНИЯХ которых встречаются все слова запроса.
-
-    Сначала SQL-фильтр по первому (обычно самому редкому) слову — он
-    отсекает большинство сообщений; затем пересечение topic_id по остальным
-    словам (покрывает и случай «все слова в одном сообщении», и случай
-    «слова в разных сообщениях одной темы»)."""
-    ids = set(Post.objects.filter(_contains_q("text", words[0]))
-              .values_list("topic_id", flat=True))
-    for w in words[1:]:
-        if not ids:
-            break
-        ids &= set(Post.objects.filter(Q(topic_id__in=ids) & _contains_q("text", w))
-                   .values_list("topic_id", flat=True))
-    return list(ids)
-
-
 def _build_search_q_topic(query):
     """Поиск тем: все слова запроса должны встречаться либо в названии темы,
-    либо в текстах сообщений одной и той же темы.
+    либо в текстах сообщений одной и той же темы (слова могут быть в разных
+    сообщениях — прежняя семантика, на которой написаны тесты).
 
-    ВАЖНО: условие по posts__text оборачивается в подзапрос Exists, а не
-    используется как JOIN-условие в основном queryset — иначе .distinct()
-    на уровне SQL не схлопывает строки (разные joined-строки различаются),
-    и пагинация теряет нужную тему.
-    """
+    Условие по постам выносится в отдельный НЕкоррелированный запрос
+    (см. _topics_with_all_words_in_posts): он выполняется один раз на
+    весь поиск, а не N correlated EXISTS-подзапросов на каждую строку
+    тем — это устраняет quadratic-налог из старой реализации."""
     words = _search_words(query)
     if not words:
         return Q(Exists(
@@ -617,15 +627,41 @@ def _build_search_q_topic(query):
     title_q = Q()
     for w in words:
         title_q &= _contains_q("title", w)
-    # одна тема должна содержать ВСЕ слова в своих сообщениях
-    posts_all = Q(Exists(
-        Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", words[0]))
-    ))
-    for w in words[1:]:
-        posts_all &= Q(Exists(
-            Post.objects.filter(topic=OuterRef("pk")).filter(_contains_q("text", w))
-        ))
+    posts_all = Q(pk__in=_topics_with_all_words_in_posts(words))
     return title_q | posts_all
+
+
+def _topics_with_all_words_in_posts(words):
+    """id тем, в СООБЩЕНИЯХ которых встречаются все слова запроса
+    (слова могут быть распределены по разным сообщениям одной темы).
+
+    Оптимизация вместо N correlated EXISTS-подзапросов на каждую строку
+    таблицы тем: первое (обычно самое редкое) слово отсекается одним
+    SQL-фильтром сразу по всем постам, и дальнейшие проверки слов делаются
+    только внутри оставшихся candidate-тем (`topic_id__in` — один IN-запрос
+    на слово по маленькому множеству). Таблица posts сканируется целиком
+    ровно один раз за весь поиск."""
+    n = len(words)
+    # 1) Один проход по posts: темы, где есть первое слово.
+    candidates = set(
+        Post.objects.filter(_contains_q("text", words[0]))
+        .values_list("topic_id", flat=True)
+    )
+    if not candidates or n == 1:
+        return list(candidates)
+    # 2) Оставшиеся слова проверяем только по candidate-темам:
+    # каждое слово даёт один некоррелированный IN-запрос по маленькому
+    # множеству вместо EXISTS-подзапроса на каждую тему списка.
+    for w in words[1:]:
+        found = set(
+            Post.objects.filter(topic_id__in=candidates)
+            .filter(_contains_q("text", w))
+            .values_list("topic_id", flat=True)
+        )
+        candidates &= found
+        if not candidates:
+            break
+    return list(candidates)
 
 
 def _clean_formula(value):
@@ -655,7 +691,10 @@ class PostsExportView(APIView):
         search = request.query_params.get("search")
         if search:
             qs = qs.filter(_build_search_q(search, ["text"]))
-        qs = qs.order_by("created_at", "id")
+        # Порядок на сайте — новые сверху (см. PostListView); экспорт
+        # приводим к тому же порядку, чтобы нумерация строк в Excel
+        # совпадала с темой на форуме.
+        qs = qs.order_by("-created_at", "-id")
 
         count = qs.count()
         if count > 10000:

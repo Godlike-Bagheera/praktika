@@ -183,7 +183,13 @@ SIMPLE_JWT = {
 # --------------------------------------------------------------------------
 # CORS (for local development; nginx proxies API in production)
 # --------------------------------------------------------------------------
-CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL", DEBUG)
+# По умолчанию: разрешено «всё» только в DEBUG. В production
+# (DJANGO_DEBUG=False) CORS_ALLOW_ALL_ORIGINS всегда False — любой сайт не
+# сможет слать запросы к API с чужого домена. Явный escape-hatch
+# CORS_ALLOW_ALL=true остаётся, но использовать его в проде не следует;
+# вместо него перечислите свои домены через CORS_ALLOWED_ORIGINS
+# (через запятую).
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL", DEBUG) and DEBUG
 CORS_ALLOWED_ORIGINS = [
     o.strip()
     for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
