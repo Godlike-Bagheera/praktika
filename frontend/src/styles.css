@@ -176,16 +176,20 @@ body {
 
 /* Компактные кнопки действий у сообщений/тем: фиксированная высота
    + flex-центрирование текста — иначе из-за py-0 текст «прыгает»
-   относительно рамок и кнопок */
+   относительно рамок и кнопок.
+   !important на вертикальных свойствах нужен, чтобы перебить Bootstrap
+   (.btn-sm{line-height:1.5}, рамка .btn) независимо от порядка подключения
+   stylesheet'ов в бандле. */
 .post-actions .btn,
 .topic-actions .btn {
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  padding-top: 0;
-  padding-bottom: 0;
+  height: 30px !important;
+  min-height: 30px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
   font-size: 0.8rem;
   white-space: nowrap;
 }
