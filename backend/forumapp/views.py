@@ -1007,6 +1007,19 @@ class ReportCreateView(APIView):
                         status=status.HTTP_201_CREATED)
 
 
+class UserReportStatusView(APIView):
+    """GET /api/posts/<post_id>/my-reports/ — жаловался ли текущий юзер на пост."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        has_reported = PostReport.objects.filter(
+            user=request.user,
+            post_id=post_id,
+        ).exists()
+        return Response({"has_reported": has_reported})
+
+
 class ReportListView(APIView):
     """GET /api/reports/?status=pending — список жалоб (админ)."""
 

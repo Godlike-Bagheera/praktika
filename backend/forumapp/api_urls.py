@@ -31,6 +31,8 @@ urlpatterns = [
          name="posts-export"),
     path("posts/<int:post_id>/report/", views.ReportCreateView.as_view(),
          name="post-report"),
+    path("posts/<int:post_id>/my-reports/", views.UserReportStatusView.as_view(),
+         name="post-report-status"),
 
     # Reports (модерация, admin only)
     path("reports/pending-count/", views.PendingReportsCountView.as_view(),

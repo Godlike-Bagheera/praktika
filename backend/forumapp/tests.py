@@ -900,6 +900,24 @@ class ReportTests(TestCase):
         self.assertEqual(len(hidden), 1)
         self.assertTrue(hidden[0]["is_hidden"])
 
+    def test_my_reports_status(self):
+        c = self._client(self.reporter)
+        url = f"/api/posts/{self.post.id}/my-reports/"
+        r = c.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["has_reported"])
+        # Жалуемся — статус меняется на has_reported=True
+        p = c.post(f"/api/posts/{self.post.id}/report/",
+                   data={"post": self.post.id, "reason": "spam"},
+                   content_type="application/json")
+        self.assertEqual(p.status_code, 201)
+        r2 = c.get(url)
+        self.assertTrue(r2.json()["has_reported"])
+        # Другой пользователь не жаловался — у него False
+        c2 = self._client(self.admin)
+        r3 = c2.get(url)
+        self.assertFalse(r3.json()["has_reported"])
+
     def test_pending_count(self):
         PostReport.objects.create(user=self.reporter, post=self.post,
                                   reason="spam")

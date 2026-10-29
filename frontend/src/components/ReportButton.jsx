@@ -12,7 +12,27 @@ export default function ReportButton({ postId, isOwnPost }) {
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [hasReported, setHasReported] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Проверка при загрузке: если пользователь уже жаловался на этот пост —
+  // кнопку не показываем (кнопка исчезает полностью, без "Отправлено").
+  useEffect(() => {
+    if (isOwnPost) return undefined;
+    let cancelled = false;
+    const checkExistingReport = async () => {
+      try {
+        const response = await api.get('/posts/' + postId + '/my-reports/');
+        if (!cancelled && response.data && response.data.has_reported) {
+          setHasReported(true);
+        }
+      } catch (err) {
+        // Если ошибка - просто игнорируем, кнопка останется
+      }
+    };
+    checkExistingReport();
+    return () => { cancelled = true; };
+  }, [postId, isOwnPost]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -26,13 +46,14 @@ export default function ReportButton({ postId, isOwnPost }) {
   }, [isOpen]);
 
   if (isOwnPost) return null;
-  if (status === 'success') return <span className="text-success small ms-2">Отправлено</span>;
+  if (hasReported || status === 'success') return null;  // Скрываем кнопку полностью
 
   const handleReport = async (reason) => {
     setStatus('loading');
     try {
       await api.post('/posts/' + postId + '/report/', { post: postId, reason: reason });
       setStatus('success');
+      setHasReported(true);  // Запоминаем что уже пожаловались
       setIsOpen(false);
     } catch (err) {
       const msg = (err.response && err.response.data && err.response.data.errors && err.response.data.errors.detail) || (err.response && err.response.data && err.response.data.detail) || 'Ошибка';
