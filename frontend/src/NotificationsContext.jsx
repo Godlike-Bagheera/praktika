@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { api } from './api';
 
@@ -12,6 +13,7 @@ const TOAST_FADE_MS = 400;          // длительность плавного
 // появление, авто-скрытие через 5 секунд с плавным исчезновением.
 function Toast({ toast, onDismiss }) {
   const timerRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     timerRef.current = setTimeout(() => onDismiss(toast.id), TOAST_TTL_MS);
@@ -40,7 +42,7 @@ function Toast({ toast, onDismiss }) {
         onClick={(e) => {
           e.preventDefault();
           onDismiss(toast.id, false);
-          window.location.href = `/topics/${toast.topic_id}`;
+          navigate(`/topics/${toast.topic_id}`);
         }}
       >
         {toast.category_name} → {toast.topic_title}

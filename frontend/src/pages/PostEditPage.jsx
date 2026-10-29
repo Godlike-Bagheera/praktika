@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, errorMessage, extractErrors } from '../api';
 import { useAuth } from '../AuthContext';
 import Alert from '../components/Alert';

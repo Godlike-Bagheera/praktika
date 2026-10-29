@@ -5,6 +5,7 @@ import { containsProfanity, PROFANITY_MESSAGE } from '../profanity';
 import { useAuth } from '../AuthContext';
 import Alert from '../components/Alert';
 import Pagination from '../components/Pagination';
+import PostEditModal from '../components/PostEditModal';
 import Spinner from '../components/Spinner';
 
 export default function TopicPage() {
@@ -33,6 +34,8 @@ export default function TopicPage() {
   const [postError, setPostError] = useState('');
   const [sending, setSending] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // сообщение, открытое для редактирования в модалке (без перехода на другую страницу)
+  const [editingPost, setEditingPost] = useState(null);
 
   const loadTopic = useCallback(() => {
     api
@@ -188,14 +191,14 @@ export default function TopicPage() {
           {topic && (
             <div className="card shadow-sm mb-4">
               <div className="card-body">
-                <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <div>
                     <h1 className="h4 mb-1">{topic.title}</h1>
                     <div className="text-muted-small">
                       Автор: {topic.owner.username} · Создана: {new Date(topic.created_at).toLocaleString('ru-RU')}
                     </div>
                   </div>
-                  <div className="d-flex gap-2">
+                  <div className="d-flex gap-2 align-items-center">
                     {canEditTopic && (
                       <button className="btn btn-sm btn-outline-secondary" onClick={() => navigate(`/topics/${id}/edit`)}>
                         Редактировать
@@ -243,7 +246,7 @@ export default function TopicPage() {
                   <div className="card-body py-2 d-flex gap-3">
                     <span className="post-avatar">{p.owner.username.charAt(0).toUpperCase()}</span>
                     <div className="flex-grow-1">
-                      <div className="d-flex justify-content-between align-items-start">
+                      <div className="d-flex justify-content-between align-items-center">
                         <div
                           className="flex-grow-1"
                           style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
@@ -251,11 +254,11 @@ export default function TopicPage() {
                           {p.text}
                         </div>
                         {(p.owner.id === user?.id || isAdmin) && (
-                          <div className="d-flex gap-1 ms-3 flex-shrink-0">
+                          <div className="d-flex gap-1 ms-3 flex-shrink-0 align-items-center">
                             {p.owner.id === user?.id && (
                               <button
                                 className="btn btn-sm btn-outline-secondary py-0 px-2"
-                                onClick={() => navigate(`/posts/${p.id}/edit`)}
+                                onClick={() => setEditingPost(p)}
                               >
                                 Изменить
                               </button>
@@ -308,6 +311,24 @@ export default function TopicPage() {
             </div>
           </form>
         </>
+      )}
+
+      {editingPost && (
+        <PostEditModal
+          post={editingPost}
+          onClose={() => setEditingPost(null)}
+          onSaved={(newText) => {
+            // обновляем сообщение в списке на месте, без перезагрузки страницы
+            setPosts((prev) =>
+              prev.map((x) =>
+                x.id === editingPost.id
+                  ? { ...x, text: newText, updated_at: new Date().toISOString() }
+                  : x
+              )
+            );
+            setEditingPost(null);
+          }}
+        />
       )}
     </div>
   );
