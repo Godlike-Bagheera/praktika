@@ -335,11 +335,6 @@ pre-wrap {
   animation: profileMenuIn .14s ease-out;
 }
 @keyframes profileMenuIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
-.profile-menu-caption { font-size: .75rem; color: #8a93a5; margin: .25rem .5rem .4rem; }
-.profile-menu-section {
-  font-size: .68rem; text-transform: uppercase; letter-spacing: .06em;
-  color: #9aa3b2; margin: .55rem .5rem .25rem;
-}
 .profile-menu-item {
   display: block; width: 100%; text-align: left; border: 0; background: transparent;
   padding: .5rem .7rem; border-radius: 10px; font-size: .92rem; color: #1f2430;
@@ -348,6 +343,22 @@ pre-wrap {
 .profile-menu-item:hover { background: #f1f4f9; }
 .profile-menu-item.is-danger { color: #c0392b; }
 .profile-menu-item.is-danger:hover { background: #fdeceb; }
+
+/* Кнопка «На главную» на странице статистики — в фирменном градиенте сайта */
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: .45rem;
+  border: 0; border-radius: 999px; padding: .5rem 1.1rem;
+  font-size: .9rem; font-weight: 600; text-decoration: none;
+  color: #fff; background: linear-gradient(135deg, var(--brand), #7c3aed);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, .28);
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+.btn-ghost:hover,
+.btn-ghost:focus {
+  color: #fff; text-decoration: none; filter: brightness(1.06);
+  transform: translateY(-1px); box-shadow: 0 8px 20px rgba(79, 70, 229, .34);
+}
+.btn-ghost .btn-ghost-arrow { font-size: 1.05rem; line-height: 1; }
 
 /* ===== Страница статистики ===== */
 .forum-page-title { font-weight: 700; }

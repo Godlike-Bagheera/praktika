@@ -57,28 +57,15 @@ export default function Header() {
 
               {menuOpen && (
                 <div className="profile-menu-dropdown">
-                  <p className="profile-menu-caption">Действия аккаунта</p>
                   {isAdmin && (
-                    <>
-                      <p className="profile-menu-section">Только для администратора</p>
-                      <Link
-                        className="profile-menu-item"
-                        to="/stats"
-                        onClick={() => setMenuOpen(false)}
-                      >
-                        📊 Статистика
-                      </Link>
-                      <a
-                        className="profile-menu-item"
-                        href="/admin/"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        ⚙️ Панель администратора
-                      </a>
-                    </>
+                    <Link
+                      className="profile-menu-item"
+                      to="/stats"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Статистика
+                    </Link>
                   )}
-                  <p className="profile-menu-section">Аккаунт</p>
                   <button type="button" className="profile-menu-item is-danger" onClick={doLogout}>
                     Выйти
                   </button>

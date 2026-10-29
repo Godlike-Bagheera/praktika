@@ -94,8 +94,8 @@ export default function StatsPage() {
     return (
       <div className="container py-4">
         <div className="alert alert-danger">{error}</div>
-        <Link to="/" className="btn btn-outline-secondary btn-sm">
-          ← На главную
+        <Link to="/" className="btn-ghost">
+          <span className="btn-ghost-arrow">←</span> На главную
         </Link>
       </div>
     );
@@ -107,8 +107,8 @@ export default function StatsPage() {
     <div className="container py-4">
       <div className="d-flex align-items-center justify-content-between mb-4">
         <h1 className="forum-page-title h3 mb-0">Статистика форума</h1>
-        <Link to="/" className="btn btn-outline-secondary btn-sm">
-          ← На главную
+        <Link to="/" className="btn-ghost">
+          <span className="btn-ghost-arrow">←</span> На главную
         </Link>
       </div>
 
