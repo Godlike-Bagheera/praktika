@@ -701,38 +701,37 @@ body, .card, .form-control, .btn, .navbar {
   transform: translate(-50%, -50%) rotate(90deg) scale(0.6);
 }
 
-/* === Единый стиль для кнопок действий (иконки) === */
-.btn-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 6px;
+/* === Текстовые кнопки действий (компактные, без эмодзи) === */
+[class^="btn-action-"],
+[class*=" btn-action-"] {
   transition: all 0.2s ease;
-  font-size: 14px;
-  line-height: 1;
 }
 
-.btn-action .btn-icon {
-  font-size: 14px;
-  line-height: 1;
-}
-
-.btn-action:hover {
+[class^="btn-action-"]:hover,
+[class*=" btn-action-"]:hover {
   transform: translateY(-1px);
 }
 
-.btn-action:active {
+[class^="btn-action-"]:active,
+[class*=" btn-action-"]:active {
   transform: translateY(0);
+}
+
+[class^="btn-action-"]:disabled,
+[class*=" btn-action-"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Кнопка "Пожаловаться" — нейтральная, не красная */
 .btn-action-report {
-  color: var(--bs-secondary-color, #6c757d);
-  border: 1px solid var(--bs-border-color, #dee2e6);
+  color: #6c757d;
+  border: 1px solid #dee2e6;
   background-color: transparent;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
 }
 
 .btn-action-report:hover {
@@ -743,25 +742,31 @@ body, .card, .form-control, .btn, .navbar {
 
 /* Кнопка "Удалить" — красная (danger) */
 .btn-action-delete {
-  color: var(--bs-danger, #dc3545);
-  border: 1px solid var(--bs-danger, #dc3545);
+  color: #dc3545;
+  border: 1px solid #dc3545;
   background-color: transparent;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
 }
 
 .btn-action-delete:hover {
-  background-color: var(--bs-danger, #dc3545);
+  background-color: #dc3545;
   color: #fff;
 }
 
-/* Кнопка "Редактировать" — синяя/нейтральная */
+/* Кнопка "Редактировать" — синяя */
 .btn-action-edit {
-  color: var(--bs-primary, #0d6efd);
-  border: 1px solid var(--bs-primary, #0d6efd);
+  color: #0d6efd;
+  border: 1px solid #0d6efd;
   background-color: transparent;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 6px;
 }
 
 .btn-action-edit:hover {
-  background-color: var(--bs-primary, #0d6efd);
+  background-color: #0d6efd;
   color: #fff;
 }
 
@@ -799,25 +804,121 @@ body, .card, .form-control, .btn, .navbar {
   border-color: #0d6efd;
 }
 
-/* Состояние disabled */
-.btn-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
+/* Кнопка переключения темы — маленькая круглая с SVG 16x16 */
+.btn-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  background-color: transparent;
+  color: var(--bs-body-color, #212529);
+  transition: all 0.2s ease;
 }
 
-/* Дропдаун жалобы под новой кнопкой-иконкой */
-.report-widget .dropdown-menu,
-.report-widget .report-menu {
+.btn-theme-toggle:hover {
+  background-color: var(--bs-secondary-bg, #e9ecef);
+  transform: scale(1.05);
+}
+
+[data-bs-theme="dark"] .btn-theme-toggle {
+  border-color: #495057;
+  color: #e9ecef;
+}
+
+[data-bs-theme="dark"] .btn-theme-toggle:hover {
+  background-color: #495057;
+}
+
+/* Дропдаун жалобы — обычное контекстное меню */
+.report-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
   margin-top: 4px;
-  z-index: 1050;
   min-width: 200px;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  background-color: var(--bs-body-bg, #fff);
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1050;
+  padding: 8px 0;
+  overflow: hidden;
 }
 
-[data-bs-theme="dark"] .report-widget .dropdown-menu,
-[data-bs-theme="dark"] .report-widget .report-menu {
+[data-bs-theme="dark"] .report-dropdown {
   background-color: #212529;
   border-color: #495057;
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.report-dropdown-header {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bs-body-color, #212529);
+  border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+  margin-bottom: 4px;
+}
+
+[data-bs-theme="dark"] .report-dropdown-header {
+  color: #e9ecef;
+  border-bottom-color: #495057;
+}
+
+.report-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--bs-body-color, #212529);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.report-dropdown-item:hover {
+  background-color: var(--bs-secondary-bg, #e9ecef);
+}
+
+[data-bs-theme="dark"] .report-dropdown-item {
+  color: #e9ecef;
+}
+
+[data-bs-theme="dark"] .report-dropdown-item:hover {
+  background-color: #495057;
+}
+
+.report-dropdown-divider {
+  height: 1px;
+  background-color: var(--bs-border-color, #dee2e6);
+  margin: 4px 0;
+}
+
+[data-bs-theme="dark"] .report-dropdown-divider {
+  background-color: #495057;
+}
+
+.report-dropdown-cancel {
+  color: #6c757d;
+  font-size: 13px;
+}
+
+.report-dropdown-cancel:hover {
+  background-color: var(--bs-secondary-bg, #e9ecef);
+  color: #212529;
+}
+
+[data-bs-theme="dark"] .report-dropdown-cancel {
+  color: #adb5bd;
+}
+
+[data-bs-theme="dark"] .report-dropdown-cancel:hover {
+  background-color: #495057;
+  color: #e9ecef;
 }
