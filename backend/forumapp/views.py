@@ -818,7 +818,9 @@ class NotificationListView(APIView):
 
     def get(self, request):
         qs = _mention_qs(request.user)
-        if request.query_params.get("unread"):
+        # unread=1|true — только непрочитанные; пустое значение (unread=) — все
+        unread = request.query_params.get("unread")
+        if unread and unread.lower() not in ("0", "false"):
             qs = qs.filter(read_at__isnull=True)
         paginator = ForumPagination()
         page = paginator.paginate_queryset(qs, request)
