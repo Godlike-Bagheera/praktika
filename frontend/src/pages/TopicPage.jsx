@@ -248,7 +248,7 @@ export default function TopicPage() {
                     <div className="flex-grow-1">
                       <div className="post-row">
                         <div
-                          className="flex-grow-1"
+                          className="post-text"
                           style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                         >
                           {p.text}
