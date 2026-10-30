@@ -734,20 +734,15 @@ def _clean_formula(value):
 
 
 class PostsExportView(APIView):
-    permission_classes = [IsAuthenticated]
+    # Выгрузка Excel доступна только администратору (модерации/аудиту).
+    permission_classes = [IsAuthenticated, IsAdmin]
 
     def get(self, request):
         from openpyxl import Workbook
         from openpyxl.styles import Font
         from openpyxl.utils import get_column_letter
 
-        user = request.user
-        is_admin = getattr(user, "is_admin_role", False)
         qs = Post.objects.select_related("owner", "topic")
-        if not is_admin:
-            # Обычный пользователь: только свои посты, скрытые модератором — не его.
-            qs = qs.filter(owner=user, is_hidden=False)
-        # Админ: все посты (скрытые тоже, для аудита).
         topic = request.query_params.get("topic")
         if topic:
             qs = qs.filter(topic_id=topic)

@@ -143,13 +143,20 @@ class ApiTests(TestCase):
         r = self.c.post("/api/categories", data={"name": "новости"}, content_type="application/json", **a)
         self.assertEqual(r.status_code, 400)
 
-    def test_export_ok_and_rows_match_list(self):
+    def test_export_forbidden_for_regular_user(self):
+        # Выгрузка Excel закрыта для обычных пользователей: прямой GET -> 403.
         h = self.login(self.u1)
         r = self.c.get("/api/posts/export?topic=%s" % self.topic.id, **h)
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 403)
+
+    def test_export_admin_ok_and_rows_match_list(self):
+        # Админ: 200 + xlsx; строки соответствуют списку темы (включая скрытые).
+        a = self.login(self.admin)
+        r = self.c.get("/api/posts/export?topic=%s" % self.topic.id, **a)
+        self.assertEqual(r.status_code, 200, r.content)
         self.assertIn("spreadsheetml", r["Content-Type"])
-        # список тех же постов
-        rl = self.c.get(f"/api/topics/{self.topic.id}/posts?limit=10000", **h)
+        # список тех же постов (админ видит и скрытые)
+        rl = self.c.get(f"/api/topics/{self.topic.id}/posts?limit=10000", **a)
         n_visible = rl.json()["count"]
         import io
         from openpyxl import load_workbook
@@ -158,6 +165,11 @@ class ApiTests(TestCase):
         self.assertEqual(ws.max_row - 1, n_visible)
         self.assertEqual(ws.freeze_panes, "A2")
         self.assertIsNotNone(ws.auto_filter.ref)
+
+    def test_export_requires_auth(self):
+        # Неавторизованный запрос выгрузки -> 401.
+        r = self.c.get("/api/posts/export?topic=%s" % self.topic.id)
+        self.assertEqual(r.status_code, 401)
 
     def test_categories_pagination(self):
         # логин до создания категорий: rate-limit входа — 10 попыток в минуту на IP

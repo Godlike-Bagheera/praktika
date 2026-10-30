@@ -189,6 +189,8 @@ export default function TopicPage() {
             const params = new URLSearchParams(prev);
             if (wanted) params.set('search', wanted);
             else params.delete('search');
+            // при изменении поиска сбрасываем страницу на 1
+            params.delete('page');
             return params;
           },
           { replace: true },
@@ -341,19 +343,22 @@ export default function TopicPage() {
 
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <h2 className="h5 mb-0">Сообщения ({count})</h2>
-            <div className="d-flex gap-2">
-              <input
-                type="search"
-                className="form-control form-control-sm search-input"
-                placeholder="Поиск по сообщениям..."
-                aria-label="Поиск по сообщениям"
-                style={{ minWidth: 220 }}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-              />
-              <button className="btn btn-sm btn-success" onClick={exportExcel} disabled={exporting}>
-                {exporting ? 'Экспорт...' : 'Скачать Excel'}
-              </button>
+            <div className="d-flex gap-2 align-items-center w-100 justify-content-end">
+              <div className="flex-grow-1" style={{ maxWidth: 640 }}>
+                <input
+                  type="search"
+                  className="form-control form-control-sm search-input"
+                  placeholder="Поиск по сообщениям темы..."
+                  aria-label="Поиск по сообщениям"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                />
+              </div>
+              {isAdmin && (
+                <button className="btn btn-sm btn-success flex-shrink-0" onClick={exportExcel} disabled={exporting}>
+                  {exporting ? 'Экспорт...' : 'Скачать Excel'}
+                </button>
+              )}
             </div>
           </div>
 
